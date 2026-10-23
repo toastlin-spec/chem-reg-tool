@@ -1,0 +1,1382 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="輸入化學品與數量，對照台灣 16 部化學品相關法規判定適用義務、管制量倍數與合計指數，並可匯出 Excel。">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>化學品法規速查表</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: two-pane workbench — inventory inputs on the left, per-chemical verdict sheets on the right; stacks under 900px */
+:root{
+  --bg:#f1f4f2; --surface:#ffffff; --sunk:#e8eeeb; --ink:#15201b; --muted:#56645e; --line:#d3dcd8;
+  --accent:#0d6654; --accent-ink:#ffffff; --accent-soft:#d8ede7;
+  --act:#b42318; --act-soft:#fde7e4; --apply:#965400; --apply-soft:#fbefd9;
+  --below:#2a6b3a; --below-soft:#e0f1e4; --na:#68726e; --na-soft:#eaedeb;
+  --font:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e1412; --surface:#151d1a; --sunk:#1b2521; --ink:#e2eae6; --muted:#97a6a0; --line:#2b3733;
+  --accent:#45c2a8; --accent-ink:#06231d; --accent-soft:#163a32;
+  --act:#ff8f80; --act-soft:#3b1814; --apply:#f1b65c; --apply-soft:#3a2a10;
+  --below:#82d293; --below-soft:#16301d; --na:#8e9994; --na-soft:#1f2825; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1412; --surface:#151d1a; --sunk:#1b2521; --ink:#e2eae6; --muted:#97a6a0; --line:#2b3733;
+  --accent:#45c2a8; --accent-ink:#06231d; --accent-soft:#163a32;
+  --act:#ff8f80; --act-soft:#3b1814; --apply:#f1b65c; --apply-soft:#3a2a10;
+  --below:#82d293; --below-soft:#16301d; --na:#8e9994; --na-soft:#1f2825; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.6;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 56px}
+.wrap{max-width:1280px;margin:0 auto}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+header.top{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end;justify-content:space-between;padding-block:28px 14px;border-bottom:2px solid var(--ink)}
+h1{font-size:1.65rem;margin:0;letter-spacing:.04em;text-wrap:balance}
+.sub{color:var(--muted);font-size:.85rem;margin:2px 0 0}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.toolbar label{font-size:.8rem;color:var(--muted);display:flex;gap:6px;align-items:center}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:6px;padding:6px 12px;line-height:1.4}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:500}
+button.ghost{background:transparent}
+button.small{padding:3px 9px;font-size:.82rem}
+button:disabled{opacity:.5;cursor:not-allowed}
+input,select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-width:0;width:100%}
+input[type=date]{width:auto}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+nav.tabs{display:flex;gap:2px;margin:14px 0 18px;border-bottom:1px solid var(--line);overflow-x:auto}
+nav.tabs button{border:none;border-bottom:3px solid transparent;border-radius:0;background:none;padding:8px 14px;color:var(--muted);white-space:nowrap}
+nav.tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent);font-weight:700}
+.grid{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);gap:24px;align-items:start}
+.grid.collapsed{grid-template-columns:minmax(0,1fr)}
+@media (max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px}
+.panel h2{font-size:1rem;margin:0 0 10px;letter-spacing:.03em}
+.eyebrow{font-size:.72rem;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;font-weight:700}
+.panel h2 .meta{font-size:.8rem;color:var(--muted);font-weight:400;letter-spacing:0}
+.incols,.inrow{display:grid;grid-template-columns:30px minmax(0,1fr) 66px 54px 58px 22px;gap:4px;align-items:center}
+.incols{font-size:.7rem;color:var(--muted);padding:0 5px 4px}
+.rows{max-height:min(62vh,620px);overflow-y:auto;border:1px solid var(--line);border-radius:6px;background:var(--sunk);padding:2px 5px}
+.inrow{padding:4px 0;border-bottom:1px solid var(--line)}
+.inrow:last-child{border-bottom:none}
+.inrow input,.inrow select{padding:4px 6px;font-size:.85rem}
+.inrow .go{padding:0;height:30px;font-family:var(--mono);font-size:.74rem;border-radius:4px}
+.inrow .go.act{background:var(--act-soft);color:var(--act);border-color:transparent;font-weight:600}
+.inrow .go.ok{background:var(--below-soft);color:var(--below);border-color:transparent}
+.inrow .go.bad{background:var(--na-soft);color:var(--na);border-style:dashed}
+.inrow .rm{padding:0;height:30px;border:none;background:transparent;color:var(--muted)}
+.inrow .rm:hover{color:var(--act)}
+.inrow .tag{grid-column:2 / -1;font-size:.72rem;color:var(--apply);line-height:1.35}
+.inrow .tag.bad{color:var(--act)}
+@media (max-width:480px){
+  .incols{display:none}
+  .inrow{grid-template-columns:32px minmax(0,1fr) 56px minmax(0,1fr) 26px}
+  .inrow .ci{grid-column:2 / -1}
+  .inrow .qi{grid-column:2}
+}
+.pastebox{margin-top:10px;display:grid;gap:8px}
+.pastebox textarea{font-family:var(--mono);font-size:.82rem;width:100%;min-height:150px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);padding:8px;resize:vertical}
+.viewbar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-bottom:10px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;flex:none}
+.seg button{border:none;border-radius:0;padding:5px 12px;background:var(--surface);color:var(--muted)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);font-weight:500}
+.viewbar input[type=search]{flex:1 1 150px;max-width:240px;width:auto}
+.viewbar select{width:auto;max-width:200px}
+.viewbar label{font-size:.82rem;color:var(--muted);display:flex;gap:4px;align-items:center;white-space:nowrap}
+.viewbar label input{width:auto}
+.legend{display:flex;gap:4px 14px;flex-wrap:wrap;font-size:.75rem;color:var(--muted);margin:0 0 8px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.ovwrap{max-height:72vh;overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.ov{border-collapse:separate;border-spacing:0;font-size:.8rem;width:max-content;min-width:100%}
+.ov th,.ov td{padding:5px 6px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:middle}
+.ov thead th{position:sticky;top:0;z-index:2;background:var(--sunk);cursor:pointer;user-select:none;text-align:center;font-size:.72rem;color:var(--muted)}
+.ov thead th[aria-sort]{color:var(--ink)}
+.ov .first{position:sticky;left:0;z-index:1;background:var(--surface);min-width:150px;max-width:210px;white-space:normal;text-align:left;border-right:1px solid var(--line)}
+.ov thead .first{z-index:3;background:var(--sunk);text-align:left}
+.ov tr.row{cursor:pointer}
+.ov tr.row:hover .first,.ov tr.row:focus-visible .first{background:var(--accent-soft)}
+.ov tr.row:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.ov .nm{font-weight:700}
+.ov .nm::before{content:"▸ ";color:var(--muted)}
+.ov tr.open .nm::before{content:"▾ "}
+.ov .cas{font-family:var(--mono);font-size:.7rem;color:var(--muted)}
+.ov td.num{text-align:right;font-family:var(--mono)}
+.ov td.c{text-align:center;font-weight:600;font-size:.74rem;min-width:54px}
+.c.act{background:var(--act-soft);color:var(--act)}
+.c.apply{background:var(--apply-soft);color:var(--apply)}
+.c.below{background:var(--below-soft);color:var(--below)}
+.c.na{color:var(--na);font-weight:400}
+.c.unk{color:var(--apply);font-weight:600}
+.ov td.detail{padding:0;background:var(--bg);white-space:normal}
+.detailwrap{position:sticky;left:0;padding:10px;max-width:100%}
+.detailwrap .card{margin:0}
+.card>header.toggle{cursor:pointer}
+.card>header.toggle:hover{background:var(--accent-soft)}
+.card .sum{padding:8px 16px;font-size:.82rem;color:var(--muted)}
+.card h3 .caret{color:var(--muted);font-size:.9rem}
+.lawsec{background:var(--surface);border:1px solid var(--line);border-radius:8px;margin-bottom:10px;overflow:hidden}
+.lawsec>summary{cursor:pointer;padding:10px 14px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;list-style:none}
+.lawsec>summary::-webkit-details-marker{display:none}
+.lawsec>summary::before{content:"▸";color:var(--muted)}
+.lawsec[open]>summary::before{content:"▾"}
+.lawsec>summary .ln{font-weight:700;flex:1 1 220px}
+.lawsec>summary .ix{font-family:var(--mono);font-size:.78rem;color:var(--muted)}
+.lawsec .tablewrap{border:none;border-top:1px solid var(--line);border-radius:0}
+.lawsec td{white-space:normal}
+.linkbtn{all:unset;cursor:pointer;color:var(--accent);font-weight:500}
+.linkbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.flash{animation:flash 1.4s ease-out}
+@keyframes flash{from{box-shadow:0 0 0 3px var(--accent)}to{box-shadow:0 0 0 0 transparent}}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.settings{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:6px}
+.settings label{display:grid;gap:2px;font-size:.72rem;color:var(--muted)}
+.hint{font-size:.78rem;color:var(--muted);margin:8px 0 0}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px}
+@media (max-width:640px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 12px;border-top:4px solid var(--na)}
+.stat.act{border-top-color:var(--act)} .stat.below{border-top-color:var(--below)}
+.stat .k{font-size:.75rem;color:var(--muted);line-height:1.35}
+.stat .v{font-family:var(--mono);font-size:1.45rem;font-weight:600;font-variant-numeric:tabular-nums}
+.stat .s{font-size:.75rem}
+.stat.act .s{color:var(--act)} .stat.below .s{color:var(--below)}
+.filters{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:12px;font-size:.85rem;color:var(--muted)}
+.filters input{width:auto}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;margin-bottom:18px;overflow:hidden}
+.card>header{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--sunk)}
+.card h3{margin:0;font-size:1.15rem}
+.card .meta{font-size:.8rem;color:var(--muted)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;padding:10px 16px 0}
+.chip{font-size:.75rem;border:1px solid var(--line);border-radius:4px;padding:1px 7px;background:var(--surface)}
+.law{display:grid;grid-template-columns:86px minmax(0,1fr);gap:4px 12px;padding:11px 16px;border-top:1px solid var(--line)}
+.chips+.law{border-top:none;margin-top:6px}
+.law .name{font-weight:700;font-size:.95rem}
+.law .title{font-weight:500}
+.law ul{margin:4px 0 0;padding-left:1.1em;font-size:.88rem}
+.law li{margin:2px 0}
+.law .basis{font-size:.75rem;color:var(--muted);margin-top:4px}
+.pill{display:inline-block;font-size:.74rem;padding:2px 8px;border-radius:999px;font-weight:700;white-space:nowrap;text-align:center;align-self:start;margin-top:2px}
+.pill.act{background:var(--act-soft);color:var(--act)}
+.pill.apply{background:var(--apply-soft);color:var(--apply)}
+.pill.below{background:var(--below-soft);color:var(--below)}
+.pill.na{background:var(--na-soft);color:var(--na)}
+.ratio{font-family:var(--mono);font-weight:600}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.85rem}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;white-space:nowrap}
+th{background:var(--sunk);font-size:.78rem;color:var(--muted);font-weight:700}
+td.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.form{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px 10px}
+.form label{display:grid;gap:2px;font-size:.72rem;color:var(--muted)}
+.ref h3{font-size:1rem;margin:22px 0 8px}
+.ref p{max-width:72ch}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:6px;font-size:.88rem;z-index:20;max-width:calc(100% - 32px)}
+.notice{font-size:.8rem;color:var(--muted);border-left:3px solid var(--apply);padding:6px 10px;background:var(--surface);margin:0 0 16px}
+a{color:var(--accent)}
+[hidden]{display:none!important}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}.flash{animation:none}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow">化學品管理 · 法規適用判定</div>
+      <h1>化學品法規速查表</h1>
+      <p class="sub">輸入化學品與數量，依 16 項法規及其附表判定適用義務、管制量倍數與合計指數。法規資料截至民國 115 年 10 月。</p>
+    </div>
+    <div class="toolbar">
+      <label>判定基準日 <input type="date" id="refDate"></label>
+      <button class="primary" id="btnExport">匯出 Excel</button>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="check" aria-selected="true">判定</button>
+    <button role="tab" data-tab="db" aria-selected="false">化學品資料庫</button>
+    <button role="tab" data-tab="ref" aria-selected="false">法規門檻與來源</button>
+  </nav>
+
+  <section id="tab-check">
+    <div class="grid" id="checkGrid">
+      <aside class="panel" id="side">
+        <h2>化學品清單 <span class="meta" id="rowCount"></span></h2>
+        <div class="incols" aria-hidden="true"><span>#</span><span>化學品（名稱或 CAS）</span><span>最大存量</span><span>單位</span><span>年運作量</span><span></span></div>
+        <div class="rows" id="rows"></div>
+        <datalist id="chemList"></datalist>
+        <div class="actions">
+          <button id="btnAdd">＋ 新增一列</button>
+          <button id="btnPaste" aria-expanded="false">貼上清單</button>
+          <button id="btnInv">匯入盤點表</button>
+          <input type="file" id="fileInv" accept=".xlsx,.xls,.csv" hidden>
+          <button class="ghost" id="btnSample">載入範例</button>
+          <button class="ghost" id="btnClear">清空</button>
+        </div>
+        <div class="pastebox" id="pasteBox" hidden>
+          <label class="hint" for="pasteText" style="margin:0">從 Excel 複製「名稱或 CAS、最大存量、單位、年運作量」幾欄後貼上，一列一個化學品；也可以每行輸入「甲苯 2000 L」。單位可用 L、mL、kg、g、公噸，未寫單位時液體以 L、其他以 kg 計。</label>
+          <textarea id="pasteText" placeholder="甲苯&#9;2000&#9;L&#10;108-88-3&#9;2000&#9;L&#10;硫酸 500 kg"></textarea>
+          <div class="actions" style="margin:0">
+            <button class="primary" id="btnPasteAdd">加入清單</button>
+            <button id="btnPasteReplace">取代現有清單</button>
+            <button class="ghost" id="btnPasteCancel">取消</button>
+          </div>
+        </div>
+        <p class="hint">編號顏色：紅＝有需辦理事項、綠＝無需辦理、灰虛線＝查無資料。點編號可跳到該化學品的判定明細。</p>
+        <p class="hint">最大存量：任一時間在場最大量（公危、工廠申報、優先管理附表三、勞檢使用）。年運作量：選填，優先管理附表二用；未填時以最大存量估算。</p>
+        <h2 style="margin-top:18px">事業單位條件（選填）</h2>
+        <div class="settings">
+          <label>勞工總人數<input type="number" min="0" id="sWorkers" inputmode="numeric"></label>
+          <label>特別危害健康作業人數<input type="number" min="0" id="sSpecial" inputmode="numeric"></label>
+          <label>作業場所氣積 m³<input type="number" min="0" id="sVol" inputmode="decimal"></label>
+        </div>
+        <p class="hint">人數用於評估分級辦法第 8 條暴露評估門檻；氣積用於計算有機溶劑容許消費量。</p>
+      </aside>
+      <div>
+        <div class="stats" id="stats"></div>
+        <div class="viewbar">
+          <div class="seg" role="group" aria-label="檢視方式">
+            <button data-mode="overview" aria-pressed="true">總覽</button>
+            <button data-mode="chem" aria-pressed="false">依化學品</button>
+            <button data-mode="law" aria-pressed="false">依法規</button>
+          </div>
+          <input type="search" id="rq" placeholder="搜尋化學品或 CAS" aria-label="搜尋化學品或 CAS">
+          <select id="rlaw" aria-label="篩選法規"><option value="">全部法規</option></select>
+          <label><input type="checkbox" id="ronly"> 只顯示需辦理</label>
+          <label id="naWrap"><input type="checkbox" id="showNA"> 顯示不適用</label>
+          <span id="cardBtns" style="display:flex;gap:6px"><button class="small" id="btnOpenAll">全部展開</button><button class="small" id="btnCloseAll">全部收合</button></span>
+          <button class="small ghost" id="btnSide" aria-controls="side">收合左側清單</button>
+        </div>
+        <div class="filters"><span id="countInfo"></span></div>
+        <div id="results"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-db" hidden>
+    <p class="notice">資料庫已收錄：容許暴露標準附表一 489 項（評估分級與監測依據，含有機溶劑、特定化學物質分類）、列管毒性化學物質附表一全部品項、關注化學物質 19 項，另有 26 種常用化學品附 SDS 物性與 GHS 分類。僅有法規清單資料者，閃火點、GHS 分類等請依 SDS 補登。內建資料依 SDS 常見分類整理，濃度與分類以貴公司實際 SDS 為準。自訂或修改的化學品會存在這個瀏覽器中，並一併匯出到 Excel 的「化學品資料庫」工作表；之後可用「從 Excel 匯入」把資料庫帶回來。</p>
+    <div class="actions" style="margin:0 0 12px">
+      <button class="primary" id="btnNew">＋ 新增化學品</button>
+      <button id="btnImport">從 Excel 匯入</button>
+      <input type="file" id="fileImport" accept=".xlsx,.xls" hidden>
+    </div>
+    <div class="panel" id="formPanel" hidden style="margin-bottom:16px">
+      <h2 id="formTitle">新增化學品</h2>
+      <div class="form" id="form"></div>
+      <p class="hint">GHS 分類代碼以空白分隔，例如：FL2 SKIN2 REPR2 STOTRE2。可用代碼：<span id="ghsCodes"></span></p>
+      <div class="actions">
+        <button class="primary" id="btnSave">儲存</button>
+        <button id="btnCancel">取消</button>
+        <button class="ghost" id="btnDel" hidden>刪除自訂資料</button>
+      </div>
+    </div>
+    <div class="filters">
+      <input type="search" id="dbSearch" placeholder="搜尋名稱、英文或 CAS" style="max-width:280px">
+      <select id="dbFilter" style="width:auto">
+        <option value="">全部化學品</option>
+        <option value="seed">內建（含 SDS 資料）</option>
+        <option value="pel">容許暴露標準附表一（評估分級）</option>
+        <option value="mon">作業環境監測項目</option>
+        <option value="os">有機溶劑</option>
+        <option value="sc">特定化學物質</option>
+        <option value="tox">毒性化學物質</option>
+        <option value="cc">關注化學物質</option>
+        <option value="custom">自訂／已修改</option>
+      </select>
+      <span id="dbCount"></span>
+    </div>
+    <div class="tablewrap"><table id="dbTable"></table></div>
+  </section>
+
+  <section id="tab-ref" class="ref" hidden></section>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="chem-data.js"></script>
+<script>
+const LAWS = {
+  L1:'職業安全衛生法', L2:'危害性化學品標示及通識規則', L3:'有機溶劑中毒預防規則', L4:'勞工作業場所容許暴露標準',
+  L5:'道路交通安全規則', L6:'事業廢棄物貯存清除處理方法及設施標準', L7:'公共危險物品及可燃性高壓氣體製造儲存處理場所設置標準暨安全管理辦法',
+  L8:'危害性化學品評估及分級管理辦法', L9:'勞工作業環境監測實施辦法', L10:'職業安全衛生設施規則', L11:'優先管理化學品之指定及運作管理辦法',
+  L12:'工廠危險物品申報辦法', L13:'特定化學物質危害預防標準', L14:'毒性及關注化學物質管理法', L15:'勞動檢查法（危險性工作場所）',
+  L16:'先驅化學品工業原料之種類及申報檢查辦法'
+};
+const LAW_ORDER = ['L1','L2','L3','L4','L5','L6','L7','L8','L9','L10','L11','L12','L13','L14','L15','L16'];
+const LEVEL = {act:'需辦理', apply:'適用', below:'未達門檻', na:'不適用'};
+const RANK = {act:3, apply:2, below:1, na:0};
+
+const GHS = {
+  FL1:'易燃液體第1級',FL2:'易燃液體第2級',FL3:'易燃液體第3級',FG1:'易燃氣體第1級',FG2:'易燃氣體第2級',PG:'加壓氣體',
+  OXL1:'氧化性液體第1級',OXL2:'氧化性液體第2級',OXL3:'氧化性液體第3級',MET1:'金屬腐蝕物第1級',
+  AT1:'急毒性第1級',AT2:'急毒性第2級',AT3:'急毒性第3級',AT4:'急毒性第4級',
+  SKIN1A:'腐蝕皮膚第1A級',SKIN1B:'腐蝕皮膚第1B級',SKIN2:'刺激皮膚第2級',EYE1:'嚴重損傷/刺激眼睛第1級',EYE2:'嚴重損傷/刺激眼睛第2級',
+  RESP1:'呼吸道過敏第1級',SSENS1:'皮膚過敏第1級',MUTA1A:'生殖細胞致突變性第1A級',MUTA1B:'生殖細胞致突變性第1B級',MUTA2:'生殖細胞致突變性第2級',
+  CARC1A:'致癌物質第1A級',CARC1B:'致癌物質第1B級',CARC2:'致癌物質第2級',REPR1A:'生殖毒性第1A級',REPR1B:'生殖毒性第1B級',REPR2:'生殖毒性第2級',
+  STOTSE1:'特定標的器官毒性-單一暴露第1級',STOTSE2:'特定標的器官毒性-單一暴露第2級',STOTSE3:'特定標的器官毒性-單一暴露第3級',
+  STOTRE1:'特定標的器官毒性-重複暴露第1級',STOTRE2:'特定標的器官毒性-重複暴露第2級',ASP1:'吸入性危害第1級'
+};
+const PHYS = new Set(['FL1','FL2','FL3','FG1','FG2','PG','OXL1','OXL2','OXL3','MET1']);
+const PMC3 = {AT1:5,AT2:50,AT3:50,STOTSE1:50,FG1:10,FG2:10,FL1:10,FL2:5000,FL3:5000,OXL1:50,OXL2:50,OXL3:50};
+const PMC2_CAT1 = ['CARC1A','CARC1B','MUTA1A','MUTA1B','REPR1A','REPR1B'];
+const PMC2_1T = ['CARC2','MUTA2','REPR2','RESP1','EYE1','STOTRE1'];
+
+// Flat chemical record; FIELDS drives the form, Excel export and Excel import.
+const FIELDS = [
+  ['id','代碼','text'],['n','中文名稱','text'],['a','別名/英文','text'],['cas','CAS No.','text'],
+  ['st','狀態','sel',['l:液體','s:固體','g:氣體']],['d','密度 kg/L','num'],['w','含量 wt%','num'],['fp','閃火點 °C','num'],
+  ['pdc','公危類別','sel',['','第一類','第二類','第三類','第四類','第五類','第六類']],['pdt','公危種類','text'],
+  ['pds','水溶性','sel',['','非水溶性','水溶性']],['pdq','管制量','num'],['pdu','管制量單位','sel',['L','kg']],
+  ['os','有機溶劑種類','sel',['','1','2','3']],['sc','特定化學物質分類','text'],
+  ['mon','監測附表','sel',[':無','os:附表一 有機溶劑','sc:附表二 特定化學物質']],
+  ['pelno','容許濃度表編號','num'],['ppm','容許濃度 ppm','num'],['mg','容許濃度 mg/m³','num'],['sym','符號（皮/瘤/高）','text'],
+  ['ppm0','115年底前 ppm','num'],['mg0','115年底前 mg/m³','num'],['ghs','GHS 分類代碼','text'],
+  ['p1','優先管理附表一','sel',[':否','Y:是']],
+  ['toxno','毒化物列管編號','text'],['toxcls','毒性分類','text'],['toxc','管制濃度 %','text'],['toxq','分級運作量 kg','num'],
+  ['ccno','關注化學物質編號','text'],['cccat','關注化學物質類別','text'],['ccc','關注管制濃度 %','text'],['cch','具危害性關注化學物質','sel',[':否','Y:是']],
+  ['cct','關注運送分級運作量 kg','num'],['ccq','關注分級運作量 kg','num'],
+  ['pre','先驅化學品','sel',['','甲類','乙類']],['lsat','勞檢附表','sel',[':無','危險物:附表一 危險物','有害物:附表二 有害物']],['lsaq','勞檢規定數量 kg','num'],
+  ['un','UN 編號','text'],['tc','運輸危險類別','text'],['note','備註','text']
+];
+
+const SEED = [
+ {id:'toluene',n:'甲苯',a:'Toluene',cas:'108-88-3',st:'l',d:0.867,fp:4,pdc:'第四類',pdt:'第一石油類',pds:'非水溶性',pdq:200,pdu:'L',os:'2',mon:'os',pelno:445,ppm:50,mg:188,sym:'皮',ppm0:100,mg0:376,ghs:'FL2 ASP1 SKIN2 REPR2 STOTSE3 STOTRE2',pre:'乙類',un:'1294',tc:'3'},
+ {id:'xylene',n:'二甲苯',a:'Xylene',cas:'1330-20-7',st:'l',d:0.864,fp:27,pdc:'第四類',pdt:'第二石油類',pds:'非水溶性',pdq:1000,pdu:'L',os:'2',mon:'os',pelno:483,ppm:100,mg:434,ghs:'FL3 AT4 SKIN2 EYE2 STOTSE3 STOTRE2 ASP1',un:'1307',tc:'3'},
+ {id:'methanol',n:'甲醇',a:'Methanol',cas:'67-56-1',st:'l',d:0.792,fp:11,pdc:'第四類',pdt:'酒精類',pdq:400,pdu:'L',os:'2',mon:'os',pelno:284,ppm:200,mg:262,sym:'皮',ghs:'FL2 AT3 STOTSE1',un:'1230',tc:'3'},
+ {id:'ethanol',n:'乙醇（95%）',a:'Ethanol 酒精',cas:'64-17-5',st:'l',d:0.81,w:95,fp:13,pdc:'第四類',pdt:'酒精類',pdq:400,pdu:'L',pelno:186,ppm:1000,mg:1880,ghs:'FL2 EYE2',un:'1170',tc:'3'},
+ {id:'ipa',n:'異丙醇',a:'Isopropyl alcohol IPA',cas:'67-63-0',st:'l',d:0.786,fp:12,pdc:'第四類',pdt:'酒精類',pdq:400,pdu:'L',os:'2',mon:'os',pelno:255,ppm:400,mg:983,ghs:'FL2 EYE2 STOTSE3',un:'1219',tc:'3'},
+ {id:'acetone',n:'丙酮',a:'Acetone',cas:'67-64-1',st:'l',d:0.791,fp:-20,pdc:'第四類',pdt:'第一石油類',pds:'水溶性',pdq:400,pdu:'L',os:'2',mon:'os',pelno:4,ppm:200,mg:475,ghs:'FL2 EYE2 STOTSE3',pre:'乙類',un:'1090',tc:'3'},
+ {id:'mek',n:'丁酮',a:'Methyl ethyl ketone MEK',cas:'78-93-3',st:'l',d:0.805,fp:-9,pdc:'第四類',pdt:'第一石油類',pds:'非水溶性',pdq:200,pdu:'L',os:'2',mon:'os',pelno:298,ppm:200,mg:590,ghs:'FL2 EYE2 STOTSE3',pre:'乙類',un:'1193',tc:'3'},
+ {id:'etoac',n:'乙酸乙酯',a:'Ethyl acetate',cas:'141-78-6',st:'l',d:0.902,fp:-4,pdc:'第四類',pdt:'第一石油類',pds:'非水溶性',pdq:200,pdu:'L',os:'2',mon:'os',pelno:184,ppm:400,mg:1440,ghs:'FL2 EYE2 STOTSE3',un:'1173',tc:'3'},
+ {id:'hexane',n:'正己烷',a:'n-Hexane',cas:'110-54-3',st:'l',d:0.659,fp:-22,pdc:'第四類',pdt:'第一石油類',pds:'非水溶性',pdq:200,pdu:'L',os:'2',mon:'os',pelno:228,ppm:50,mg:176,sym:'皮',ghs:'FL2 SKIN2 REPR2 STOTSE3 STOTRE2 ASP1',un:'1208',tc:'3'},
+ {id:'dcm',n:'二氯甲烷',a:'Dichloromethane DCM',cas:'75-09-2',st:'l',d:1.33,os:'2',mon:'os',pelno:137,ppm:50,mg:174,sym:'瘤',ghs:'CARC2 SKIN2 EYE2 STOTSE3',toxno:'079-01',toxcls:'4',toxc:25,un:'1593',tc:'6.1'},
+ {id:'benzene',n:'苯',a:'Benzene',cas:'71-43-2',st:'l',d:0.879,fp:-11,pdc:'第四類',pdt:'第一石油類',pds:'非水溶性',pdq:200,pdu:'L',sc:'丙類第一種',mon:'sc',pelno:32,ppm:1,mg:3.2,sym:'皮瘤',ghs:'FL2 CARC1A MUTA1B STOTRE1 ASP1 SKIN2 EYE2',toxno:'052-01',toxcls:'1,2',toxc:70,toxq:50,un:'1114',tc:'3'},
+ {id:'styrene',n:'苯乙烯',a:'Styrene',cas:'100-42-5',st:'l',d:0.906,fp:31,pdc:'第四類',pdt:'第二石油類',pds:'非水溶性',pdq:1000,pdu:'L',os:'2',mon:'os',pelno:410,ppm:50,mg:213,ghs:'FL3 AT4 SKIN2 EYE2 REPR2 STOTRE1',un:'2055',tc:'3'},
+ {id:'gasoline',n:'汽油',a:'Gasoline',cas:'8006-61-9',st:'l',d:0.74,fp:-43,pdc:'第四類',pdt:'第一石油類',pds:'非水溶性',pdq:200,pdu:'L',os:'3',pelno:215,ppm:300,mg:890,ghs:'FL1 CARC1B MUTA1B REPR2 ASP1 SKIN2 STOTSE3',un:'1203',tc:'3',note:'含苯體積比1%以上者為特定化學物質丙類第一種；作溶劑用時屬第三種有機溶劑'},
+ {id:'diesel',n:'柴油',a:'Diesel fuel',cas:'68334-30-5',st:'l',d:0.84,fp:55,pdc:'第四類',pdt:'第二石油類',pds:'非水溶性',pdq:1000,pdu:'L',ghs:'FL3 AT4 SKIN2 CARC2 STOTRE2 ASP1',un:'1202',tc:'3',note:'容許暴露標準附表一未列柴油蒸氣；油霧可參考「油霧滴（礦物性）」5 mg/m³'},
+ {id:'kerosene',n:'煤油',a:'Kerosene',cas:'8008-20-6',st:'l',d:0.8,fp:43,pdc:'第四類',pdt:'第二石油類',pds:'非水溶性',pdq:1000,pdu:'L',ghs:'FL3 ASP1 SKIN2 STOTSE3',un:'1223',tc:'3'},
+ {id:'formalin',n:'甲醛溶液（37%）',a:'Formalin Formaldehyde 福馬林',cas:'50-00-0',st:'l',d:1.09,w:37,fp:64,pdc:'第四類',pdt:'第二石油類',pds:'水溶性',pdq:2000,pdu:'L',sc:'丙類第一種',mon:'sc',pelno:211,ppm:0.75,mg:0.9,sym:'瘤',ppm0:1,mg0:1.2,ghs:'AT3 SKIN1B EYE1 SSENS1 CARC1B MUTA2 STOTSE3',toxno:'066-01',toxcls:'2,3',toxc:15,toxq:50,lsat:'有害物',lsaq:5000,un:'2209',tc:'8',note:'公危分類依閃火點及可燃性液體含量判定，請以SDS確認'},
+ {id:'h2so4',n:'硫酸（98%）',a:'Sulfuric acid',cas:'7664-93-9',st:'l',d:1.84,w:98,sc:'丁類',mon:'sc',pelno:414,mg:1,ghs:'SKIN1A EYE1 MET1',pre:'乙類',un:'1830',tc:'8',note:'先驅化學品乙類：比重達1.84或濃度95~98%者'},
+ {id:'hcl',n:'鹽酸（35%）',a:'Hydrochloric acid 氯化氫',cas:'7647-01-0',st:'l',d:1.18,w:35,sc:'丁類',pelno:233,ppm:5,mg:7.5,sym:'高',ghs:'SKIN1B EYE1 STOTSE3 MET1',lsat:'有害物',lsaq:5000,un:'1789',tc:'8',note:'先驅化學品乙類限比重達1.2或濃度達39.1%者，35%鹽酸未達'},
+ {id:'hno3',n:'硝酸（68%）',a:'Nitric acid',cas:'7697-37-2',st:'l',d:1.41,w:68,pdc:'第六類',pdt:'硝酸',pdq:300,pdu:'kg',sc:'丁類',pelno:325,ppm:2,mg:5.2,ghs:'OXL3 SKIN1A EYE1 AT3 MET1',un:'2031',tc:'8'},
+ {id:'naoh',n:'氫氧化鈉（45%液鹼）',a:'Sodium hydroxide 液鹼',cas:'1310-73-2',st:'l',d:1.48,w:45,pelno:407,mg:2,ghs:'SKIN1A EYE1 MET1',un:'1824',tc:'8'},
+ {id:'h2o2',n:'過氧化氫（35%）',a:'Hydrogen peroxide 雙氧水',cas:'7722-84-1',st:'l',d:1.13,w:35,pelno:237,ppm:1,mg:1.4,ghs:'AT4 EYE1 STOTSE3',lsat:'危險物',lsaq:5000,un:'2014',tc:'5.1',note:'依CNS 15030分類為氧化性液體者（約50%以上）屬公共危險物品第六類，管制量300 kg'},
+ {id:'lpg',n:'液化石油氣',a:'LPG 丙烷 丁烷',cas:'68476-85-7',st:'g',d:0.54,fp:-104,pelno:265,ppm:1000,mg:1800,ghs:'FG1 PG',un:'1075',tc:'2.1',note:'屬可燃性高壓氣體（公危辦法第4條），儲存與使用依同辦法第五章規定'},
+ {id:'ammonia',n:'氨（液氨）',a:'Ammonia anhydrous',cas:'7664-41-7',st:'g',d:0.68,sc:'丁類',pelno:18,ppm:50,mg:35,ghs:'FG2 PG AT3 SKIN1B EYE1',lsat:'有害物',lsaq:50000,un:'1005',tc:'2.3'},
+ {id:'pce',n:'四氯乙烯',a:'Tetrachloroethylene PCE',cas:'127-18-4',st:'l',d:1.62,os:'2',mon:'os',pelno:426,ppm:50,mg:339,ghs:'CARC2 SKIN2 EYE2 SSENS1 STOTSE3',toxno:'063-01',toxcls:'1,2',toxc:10,toxq:350,un:'1897',tc:'6.1'},
+ {id:'tce',n:'三氯乙烯',a:'Trichloroethylene TCE',cas:'79-01-6',st:'l',d:1.46,os:'1',mon:'os',pelno:453,ppm:50,mg:269,ghs:'SKIN2 EYE2 MUTA2 CARC1B STOTSE3',p1:'Y',toxno:'064-01',toxcls:'1,2',toxc:10,toxq:50,un:'1710',tc:'6.1'},
+ {id:'dmf',n:'N,N-二甲基甲醯胺',a:'DMF Dimethylformamide',cas:'68-12-2',st:'l',d:0.944,fp:58,pdc:'第四類',pdt:'第二石油類',pds:'水溶性',pdq:2000,pdu:'L',os:'2',mon:'os',pelno:161,ppm:10,mg:30,sym:'皮',ghs:'FL3 AT4 EYE2 REPR1B',toxno:'098-01',toxcls:'2',toxc:30,toxq:50,un:'2265',tc:'3'}
+];
+
+const SOURCES = [
+  ['L1','N0060001',''],['L2','N0060054','115.08.26'],['L3','N0060017','114.05.14'],['L4','N0060004','114.04.11'],
+  ['L5','K0040013','115.06.26'],['L6','O0050005','112.11.01'],['L7','D0120025','113.07.16'],['L8','N0060070','103.12.31'],
+  ['L9','N0060033','115.06.12'],['L10','N0060009',''],['L11','N0060064','113.06.06'],['L12','J0030101','113.04.24'],
+  ['L13','',''],['L14','O0060012','108.01.16'],['L15','N0070019','109.07.17'],['L16','J0030042','114.09.03']
+];
+
+/* ---------- storage ---------- */
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+const today = new Date();
+const todayStr = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+const SAMPLE_ROWS = [{text:'甲苯（108-88-3）',id:'toluene',qty:'2000',unit:'L',annual:''},{text:'甲醇（67-56-1）',id:'methanol',qty:'300',unit:'L',annual:''}];
+let custom = store.get('crq.custom', {});
+let rows = store.get('crq.rows', SAMPLE_ROWS);
+let settings = Object.assign({date:todayStr, workers:'', special:'', vol:''}, store.get('crq.settings', {}));
+let showNA = false;
+
+// 勞動檢查法施行細則附表一（危險物）、附表二（有害物）規定數量，依 CAS 對應
+const LSA = {
+  '1338-23-4':['危險物',2000],'94-36-0':['危險物',3000],'75-56-9':['危險物',10000],'75-21-8':['危險物',5000],'75-15-0':['危險物',5000],
+  '74-86-2':['危險物',5000],'1333-74-0':['危險物',5000],'7722-84-1':['危險物',5000],'7803-62-5':['危險物',50],'628-96-6':['危險物',1000],
+  '55-63-0':['危險物',1000],'99-35-4':['危險物',5000],'118-96-7':['危險物',5000],'88-89-1':['危險物',5000],'79-21-0':['危險物',5000],
+  '7775-09-9':['危險物',25000],'628-86-4':['危險物',1000],'13424-46-9':['危險物',5000],'107-13-1':['危險物',20000],
+  '7782-50-5':['有害物',5000],'74-90-8':['有害物',1000],'151-56-4':['有害物',500],'7803-51-2':['有害物',50],'624-83-9':['有害物',300],
+  '7664-39-3':['有害物',1000],'75-74-1':['有害物',1000],'78-00-2':['有害物',5000],'7664-41-7':['有害物',50000],'7647-01-0':['有害物',5000],
+  '7446-09-5':['有害物',1000],'75-44-5':['有害物',100],'50-00-0':['有害物',5000],'107-02-8':['有害物',150],'10028-15-6':['有害物',100],
+  '7784-42-1':['有害物',50],'7726-95-6':['有害物',1000],'74-83-9':['有害物',2000],'13463-39-3':['有害物',100],'57-57-8':['有害物',100],
+  '7440-41-7':['有害物',10],'91-94-1':['有害物',10],'134-32-7':['有害物',10],'119-93-7':['有害物',10],'119-90-4':['有害物',10]
+};
+// 先驅化學品工業原料（附表一甲類、附表二乙類），依 CAS 對應
+const PRE = {
+  '108-24-7':'甲類','103-82-2':'甲類','118-92-3':'甲類','89-52-1':'甲類','120-58-1':'甲類','120-57-0':'甲類','94-59-7':'甲類','110-89-4':'甲類',
+  '7719-09-7':'甲類','7647-10-1':'甲類','7723-14-0':'甲類','7553-56-2':'甲類','10034-85-2':'甲類','6303-21-5':'甲類','74-89-5':'甲類','140-29-4':'甲類',
+  '7664-93-9':'乙類','7722-64-7':'乙類','108-88-3':'乙類','60-29-7':'乙類','67-64-1':'乙類','78-93-3':'乙類','93-89-0':'乙類'
+};
+const SC_NAME = {'S甲':'甲類','S乙':'乙類','S丙1':'丙類第一種','S丙2':'丙類第二種','S丙3':'丙類第三種','S丁':'丁類'};
+const SEED_SRC = '內建（含SDS資料）', LIST_SRC = '法規清單';
+let LIST_CACHE = null;
+function buildListChems(){
+  if(LIST_CACHE) return LIST_CACHE;
+  const D = window.CHEM_DATA || {PEL:'',TOX:'',CC:'',MON_SC:[]};
+  const rows = s => String(s||'').split('\n').filter(l => l.trim()).map(l => l.split('|').map(x => x.trim()));
+  const recs = [], byCas = {}, monSc = new Set(D.MON_SC || []);
+  const pick = cas => cas && byCas[cas];
+  rows(D.PEL).forEach(([no,n,en,cas,sym,ppm,mg,rem]) => {
+    const r = {id:'pel'+no, n, a:en, cas:cas||'—', pelno:+no, lists:['pel']};
+    if(sym) r.sym = sym; if(ppm) r.ppm = +ppm; if(mg) r.mg = +mg;
+    const notes = [];
+    String(rem||'').split(';').filter(Boolean).forEach(x => {
+      if(/^O[123]$/.test(x)) r.os = x[1];
+      else if(SC_NAME[x]) r.sc = SC_NAME[x];
+      else notes.push(x);
+    });
+    if(r.os === '1' || r.os === '2') r.mon = 'os';
+    if(monSc.has(+no)) r.mon = 'sc';
+    if(notes.length) r.note = notes.join('；');
+    recs.push(r); if(cas && !byCas[cas]) byCas[cas] = r;
+  });
+  rows(D.TOX).forEach(([no,seq,n,en,cas,conc,gq,cls]) => {
+    let r = pick(cas);
+    if(!r || r.toxno){ r = {id:'tox'+no+'-'+seq, n, a:en, cas:cas||'—', lists:[]}; recs.push(r); if(cas && !byCas[cas]) byCas[cas] = r; }
+    r.toxno = no+'-'+seq; r.toxcls = cls; r.toxc = conc; if(gq && gq !== '-') r.toxq = +gq; r.lists.push('tox');
+    if(r.n !== n && !String(r.a||'').includes(n)) r.a = (r.a ? r.a+' ' : '') + n;
+  });
+  rows(D.CC).forEach(([no,seq,n,en,cas,conc,haz,qt,qo,cat]) => {
+    let r = pick(cas);
+    if(!r || r.ccno){ r = {id:'cc'+no+'-'+seq, n, a:en, cas:cas||'—', lists:[]}; recs.push(r); if(cas && !byCas[cas]) byCas[cas] = r; }
+    r.ccno = no+'-'+seq; r.cccat = cat; r.ccc = conc; if(haz === 'Y') r.cch = 'Y';
+    if(qt && qt !== '-') r.cct = +qt; if(qo && qo !== '-') r.ccq = +qo; r.lists.push('cc');
+    if(r.n !== n && !String(r.a||'').includes(n)) r.a = (r.a ? r.a+' ' : '') + n;
+  });
+  recs.forEach(r => { r.src = LIST_SRC; if(LSA[r.cas]){ r.lsat = LSA[r.cas][0]; r.lsaq = LSA[r.cas][1]; } if(PRE[r.cas]) r.pre = PRE[r.cas]; });
+  return LIST_CACHE = recs;
+}
+const KEEP_FROM_LIST = ['toxno','toxcls','toxc','toxq','ccno','cccat','ccc','cch','cct','ccq','lsat','lsaq','pre','sc','os','mon','pelno','ppm','mg','sym'];
+function allChems(){
+  const m = {};
+  const list = buildListChems();
+  list.forEach(c => m[c.id] = Object.assign({}, c));
+  SEED.forEach(s => {
+    const base = list.find(c => c.cas === s.cas);
+    const merged = Object.assign({}, s, {src:SEED_SRC, lists:['seed'].concat(base ? base.lists : [])});
+    if(base){
+      KEEP_FROM_LIST.forEach(k => { if(merged[k] == null && base[k] != null && !(k==='pre' && s.note && s.note.includes('先驅'))) merged[k] = base[k]; });
+      if(!(num(s.w) != null && num(s.w) < 100)) delete m[base.id];   // 溶液（如甲醛37%）保留純物質那一筆
+    }
+    m[s.id] = merged;
+  });
+  Object.values(custom).forEach(c => m[c.id] = Object.assign({}, c, {lists:(m[c.id] ? m[c.id].lists : []).concat('custom'), src: m[c.id] ? m[c.id].src+'（已修改）' : '自訂'}));
+  return m;
+}
+let CHEMS = {};
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const num = v => { if(v === '' || v == null) return null; const n = parseFloat(v); return isFinite(n) ? n : null; };
+const fmt = (n, d=2) => n == null ? '—' : (Math.round(n * 10**d) / 10**d).toLocaleString('zh-TW', {maximumFractionDigits:d});
+const label = c => c.n + '（' + c.cas + '）';
+function resolveChem(text){
+  const t = String(text||'').trim(); if(!t) return null;
+  const list = Object.values(CHEMS);
+  const tl = t.toLowerCase();
+  return list.find(c => label(c) === t) || list.find(c => c.n === t) || list.find(c => c.cas === t)
+    || list.find(c => c.cas !== '—' && t.includes(c.cas)) || list.find(c => (c.a||'').toLowerCase() === tl)
+    || list.find(c => (c.a||'').toLowerCase().split(/\s+/).includes(tl))
+    || (tl.length >= 4 ? list.find(c => (c.a||'').toLowerCase().startsWith(tl)) : null)
+    || list.find(c => c.n.startsWith(t)) || null;
+}
+const ghsList = c => String(c.ghs||'').split(/[\s,，、]+/).filter(Boolean);
+const ghsText = codes => codes.map(g => GHS[g] || g).join('、');
+function stelCoef(v){ return v < 1 ? 3 : v < 10 ? 2 : v < 100 ? 1.5 : v < 1000 ? 1.25 : 1; }
+function indoorBand(r){
+  if(r < 5) return '未達5倍：防火構造免設、非防火構造0.5 m';
+  if(r < 10) return '5倍以上未達10倍：防火構造1 m、非防火構造1.5 m';
+  if(r < 20) return '10倍以上未達20倍：防火構造2 m、非防火構造3 m';
+  if(r < 50) return '20倍以上未達50倍：防火構造3 m、非防火構造5 m';
+  if(r < 200) return '50倍以上未達200倍：防火構造5 m、非防火構造10 m';
+  return '200倍以上：防火構造10 m、非防火構造15 m';
+}
+
+/* ---------- rule engine ---------- */
+function evaluate(row){
+  const c = CHEMS[row.id];
+  const qty = num(row.qty) || 0;
+  const unit = row.unit || 'L';
+  const dKnown = num(c.d) != null;
+  const d = num(c.d) || 1;
+  const kg = unit === 'L' ? qty * d : qty;
+  const L = unit === 'kg' ? qty / d : qty;
+  const annualIn = num(row.annual);
+  const annualKg = annualIn == null ? kg : (unit === 'L' ? annualIn * d : annualIn);
+  const annualEst = annualIn == null;
+  const w = num(c.w) ?? 100;
+  const g = ghsList(c); const gs = new Set(g);
+  const health = g.filter(x => !PHYS.has(x));
+  const newPel = settings.date >= '2027-01-01';
+  const fp = num(c.fp);
+  const res = [];
+  const out = {chem:c, row, qty, unit, kg, L, annualKg, annualEst, res, ratio:{}, dUnknown: !dKnown && qty > 0};
+  const pelKnown = num(c.ppm) != null || num(c.mg) != null;
+  const listed = pelKnown || !!c.toxno || !!c.ccno;
+  const noGhs = !g.length;
+  const NOGHS = '尚未建立此化學品之GHS危害分類，請依供應商SDS確認後至「化學品資料庫」補登';
+  const thin = c.src === LIST_SRC;
+  const R = (law, level, title, lines, basis, ratio) => res.push({law, level, title, lines:lines||[], basis:basis||'', ratio:ratio ?? null});
+
+  // L1 職業安全衛生法
+  if(c.p1 === 'Y'){
+    R('L1','act','屬優先管理化學品附表一之化學品',[
+      '不得使未滿18歲者從事處理或暴露之工作（第29條第1項第3款）',
+      '不得使妊娠中或分娩後未滿一年之女性勞工從事處理或暴露之工作（第30條第1項第5款）',
+      '另適用第10條標示與SDS、第11條評估分級、第12條作業環境監測'],'職業安全衛生法第10~12、29、30條');
+  } else if(g.length || listed){
+    R('L1','apply','屬危害性化學品',[
+      '第10條：危害性化學品應予標示、製備清單並提供安全資料表',
+      '第11條：應依健康危害及散布狀況評估風險等級並分級管理',
+      pelKnown ? '第12條：定有容許暴露標準者，應訂定監測計畫實施作業環境監測' : '第12條：未定容許暴露標準，依評估分級辦法管理'].concat(noGhs ? [NOGHS] : []),'職業安全衛生法第10~12條');
+  } else R('L1','na','未具CNS 15030危害分類',[],'');
+
+  // L2 標示及通識
+  if(g.length || listed){
+    R('L2','act','應實施危害通識',[
+      noGhs ? NOGHS : '危害分類：' + ghsText(g),
+      '容器應依附表一、二標示危害圖式、名稱、危害成分、警示語、危害警告訊息與防範措施（第5條）',
+      '提供並置於工作場所易取得之處安全資料表，至少每3年檢討一次（第12、15條）',
+      '製作危害性化學品清單、危害通識計畫並實施教育訓練（第17條）'],'危害性化學品標示及通識規則第5、12、15、17條');
+  } else R('L2','na','未具危害分類',[],'');
+
+  // L3 有機溶劑
+  if(c.os){
+    const f = {1:['1/15','密閉設備或局部排氣裝置',1/15],2:['2/5','密閉設備、局部排氣裝置或整體換氣裝置',2/5],3:['3/2','（限儲槽或通風不充分之室內作業場所）密閉設備、局部排氣裝置或整體換氣裝置',3/2]}[c.os];
+    const lines = ['第'+c.os+'種有機溶劑（附表一第'+['','一','二','三'][c.os]+'款）',
+      '室內作業場所應設'+f[1]+'（第6條）',
+      '應指定現場主管擔任有機溶劑作業主管（第20條）',
+      '室內儲藏應使用備有栓蓋之堅固容器（第27條）',
+      '容許消費量 = '+f[0]+' × 作業場所氣積（g/h；氣積不含地面4 m以上空間，超過150 m³以150 m³計）；未超過者得不受第二章至第四章限制（第5條、附表二）'];
+    const vol = num(settings.vol);
+    if(vol){ const v = Math.min(vol,150); lines.push('以氣積 '+fmt(vol,0)+' m³ 計：容許消費量 = '+fmt(f[2]*v,1)+' g/h'+(c.os==='3'?'（一日）':'（室內每小時）')); }
+    R('L3','act','第'+c.os+'種有機溶劑',lines,'有機溶劑中毒預防規則第3、5、6、20、27條，附表一、二');
+  } else R('L3','na','非附表一所列有機溶劑',[],'');
+
+  // L4 容許暴露標準
+  const hasPel = num(c.ppm) != null || num(c.mg) != null;
+  if(hasPel){
+    const useOld = !newPel && (num(c.ppm0) != null || num(c.mg0) != null);
+    const ppm = useOld ? num(c.ppm0) : num(c.ppm), mg = useOld ? num(c.mg0) : num(c.mg);
+    out.pelEff = ppm != null ? fmt(ppm,4)+'ppm' : mg != null ? fmt(mg,4)+'mg' : '有';
+    const sym = c.sym || '';
+    const val = ppm != null ? ppm : mg, u = ppm != null ? 'ppm' : 'mg/m³';
+    const lines = [];
+    if(sym.includes('高')) lines.push('最高容許濃度（任何時間不得超過）'+(ppm!=null?fmt(ppm,3)+' ppm':'')+(mg!=null?'（'+fmt(mg,3)+' mg/m³）':''));
+    else {
+      lines.push('八小時日時量平均容許濃度 '+(ppm!=null?fmt(ppm,3)+' ppm':'')+(mg!=null?(ppm!=null?'（'+fmt(mg,3)+' mg/m³）':fmt(mg,3)+' mg/m³'):''));
+      lines.push('短時間時量平均容許濃度 = '+fmt(val,3)+' × 變量係數 '+stelCoef(val)+' = '+fmt(val*stelCoef(val),3)+' '+u+'（第3條第2款）');
+    }
+    if(sym.includes('皮')) lines.push('註「皮」：易經皮膚、黏膜滲入體內，應採皮膚防護');
+    if(sym.includes('瘤')) lines.push('註「瘤」：經證實或疑似對人類會引起腫瘤');
+    if(useOld) lines.push('116年1月1日起修正為 '+(num(c.ppm)!=null?fmt(num(c.ppm),3)+' ppm':'')+(num(c.mg)!=null?'（'+fmt(num(c.mg),3)+' mg/m³）':''));
+    else if(num(c.ppm0) != null) lines.push('115年12月31日前之舊值為 '+fmt(num(c.ppm0),3)+' ppm（'+fmt(num(c.mg0),3)+' mg/m³）');
+    R('L4','apply','附表一編號 '+(c.pelno||'—')+(sym?'（'+sym+'）':''),lines,'勞工作業場所容許暴露標準第2、3、8條，附表一');
+  } else R('L4','na','附表一未列容許濃度',c.note && c.note.includes('容許暴露') ? [c.note] : [],'');
+
+  // L5 道路交通安全規則
+  if(c.un){
+    const lim = c.st === 'g' ? 50 : c.st === 's' ? 200 : 100;
+    const lines = ['UN '+c.un+'，CNS 6864 第'+c.tc+'類危險物品'];
+    if(kg > lim){
+      lines.push('以罐槽車運送，或以其他貨車單次運送淨重超過 '+lim+' kg（目前存量約 '+fmt(kg,0)+' kg）時：');
+      lines.push('備危險物品道路運送計畫書及SDS向公路監理機關申請臨時通行證並隨車攜帶');
+      lines.push('懸掛危險物品標誌、駕駛及隨車護送人員應經專業訓練並攜帶訓練證明書、罐槽體應檢驗合格');
+      R('L5','act','運送時需辦理臨時通行證等',lines,'道路交通安全規則第84條');
+    } else {
+      lines.push('非罐槽車單次運送淨重未逾 '+lim+' kg 者得免第84條第1項第1~7款，但仍應隨車攜帶SDS；罐槽車一律適用');
+      R('L5','apply','運送危險物品',lines,'道路交通安全規則第84條');
+    }
+  } else R('L5','na', thin ? '未建UN編號，請依SDS第14節確認運輸分類' : '非危險物品運輸分類',[],'');
+
+  // L6 事業廢棄物
+  const waste = [];
+  if(c.st !== 'g' && fp != null && fp < 60) waste.push('易燃性：廢液閃火點小於60°C（有害事業廢棄物認定標準第4條第6款）');
+  if(g.some(x => x.startsWith('SKIN1'))) waste.push('腐蝕性：廢液pH ≤ 2.0 或 ≥ 12.5 者屬之（認定標準第4條）');
+  if(c.toxno && /[123]/.test(c.toxcls||'')) waste.push('毒性：屬第一至三類毒性化學物質之廢棄物（認定標準第4條第1款）');
+  if(waste.length){
+    R('L6','apply','廢棄時屬有害事業廢棄物',[...waste,
+      '應與一般事業廢棄物分開貯存，以固定包裝或容器密封並標示名稱、日期、數量、成分及有害特性（第5、7條）',
+      '貯存以1年為限，須延長者應於期滿2個月前申請，以1次為限（第7條）',
+      '貯存設施應設白底、紅字、黑框之警告標示及災害防止設備（第11條）'],'事業廢棄物貯存清除處理方法及設施標準第5、7、11條；有害事業廢棄物認定標準第4條');
+  } else R('L6','na', thin ? '未建閃火點、腐蝕性資料，請依SDS及廢棄物特性判定' : '依特性判定未屬有害事業廢棄物（仍須依實際廢棄物檢測）',[],'');
+
+  // L7 公共危險物品
+  const pdq = num(c.pdq);
+  if(c.pdc && pdq){
+    const amt = c.pdu === 'L' ? L : kg;
+    const r = amt / pdq; out.ratio.pd = r;
+    const head = c.pdc+' '+(c.pdt||'')+(c.pds?'（'+c.pds+'）':'')+'，管制量 '+fmt(pdq,0)+' '+c.pdu+'；存量 '+fmt(amt,1)+' '+c.pdu+' = 管制量 '+fmt(r,2)+' 倍';
+    if(r >= 1){
+      const lines = [head,'達管制量：應於符合本辦法之製造、儲存或處理場所辦理，儲存應設儲存場所（第20條、消防法第15條）',
+        '室內儲存場所保留空地（第21條第2款）：'+indoorBand(r)];
+      if(r >= 10) lines.push('達管制量10倍以上：製造及一般處理場所四周空地5 m以上（第14條）、應設避雷設備（第16條第8款、第21條第14款）');
+      lines.push('多種公共危險物品同場所儲存時，商數加總大於1即達管制量（附表一備註）');
+      R('L7','act','達管制量（'+fmt(r,1)+' 倍）',lines,'公共危險物品及可燃性高壓氣體…辦法第3、14、16、20、21條，附表一',r);
+    } else {
+      R('L7','below','未達管制量（'+fmt(r,2)+' 倍）',[head,'同一場所多種公共危險物品之商數加總若大於1仍達管制量，見上方合計指數'],'同辦法附表一',r);
+    }
+  } else if(c.st === 'g' && (gs.has('FG1') || gs.has('FG2'))){
+    R('L7','apply','可燃性高壓氣體',[c.note||'依第4條判定是否屬可燃性高壓氣體','其製造、儲存、處理場所之安全距離、容器保管室等依同辦法第五章規定'],'公共危險物品及可燃性高壓氣體…辦法第4條、第五章');
+  } else R('L7','na', thin ? '未建公危分類，請依SDS閃火點、物性對照附表一' : '非附表一所列公共危險物品',!c.pdc&&c.note&&c.note.includes('第六類')?[c.note]:[],'');
+
+  // L12 工廠危險物品申報（範圍與管制量同公危六類）
+  if(c.pdc && pdq){
+    const r = out.ratio.pd;
+    const head = '附表一 '+(c.pdt||c.pdc)+(c.pds?'（'+c.pds+'）':'')+'，管制量 '+fmt(pdq,0)+' '+c.pdu+'；製造、加工或使用量 = 管制量 '+fmt(r,2)+' 倍';
+    if(r >= 1){
+      R('L12','act','達管制量，應申報（'+fmt(r,1)+' 倍）',[head,
+        '達管制量次日起10日內以網路申報系統向直轄市、縣（市）主管機關申報（第11條第1項）',
+        '之後每年1月、7月定期申報；數量增加達管制量或新增品項時，事實發生次日起10日內變更申報（第11條第2、3項）',
+        '應投保公共意外責任保險（工廠管理輔導法第22條）；未依規定申報處5萬~500萬元罰鍰（同法第28-14條）',
+        '適用對象為依工廠管理輔導法登記之工廠'],'工廠危險物品申報辦法第9~11條，附表一',r);
+    } else R('L12','below','未達管制量（'+fmt(r,2)+' 倍）',[head,'多品項單項均未達時，綜合管制指數（商數加總）大於1仍須申報（第9條第2項）'],'工廠危險物品申報辦法第9條',r);
+  } else if(gs.has('FG1') || gs.has('FG2')){
+    R('L12','apply','可燃性高壓氣體（請確認）',['經濟部103年曾公告可燃性高壓氣體為工廠危險物品，現行113年版辦法第2條第7款為「其他經中央主管機關公告者」，申報範圍請以經濟部現行公告為準'],'工廠危險物品申報辦法第2條');
+  } else R('L12','na', thin ? '未建危險物品分類，請依SDS閃火點、物性對照附表一' : '非附表一所列危險物品',[],'');
+
+  // L8 評估及分級管理
+  if(health.length || pelKnown){
+    const lines = [health.length ? '健康危害：'+ghsText(health) : '定有容許暴露標準之化學品。'+NOGHS,'應評估危害及暴露程度，劃分風險等級並採取分級管理措施，至少每3年執行一次；製程變更時於變更前或變更後3個月內重新評估（第4、6條）'];
+    const W = num(settings.workers), S = num(settings.special);
+    if(hasPel){
+      if((W!=null && W >= 500) || (S!=null && S >= 100))
+        lines.push('已達第8條門檻：應以採樣分析或定量推估模式實施暴露評估；低於PEL 1/2 每3年、1/2~PEL 每年、達PEL以上每3個月（第8條）');
+      else if(W!=null || S!=null)
+        lines.push('未達第8條人數門檻：可參照中央主管機關技術指引（如化學品分級管理工具）辦理（第7條）');
+      else lines.push('特別危害健康作業勞工100人以上或總勞工500人以上者，須實施定量暴露評估（第8條）');
+    }
+    lines.push('評估及分級管理紀錄至少保存3年（第11條）');
+    R('L8','act','應實施評估及分級管理',lines,'危害性化學品評估及分級管理辦法第4、6~8、10、11條');
+  } else R('L8','na','未具健康危害分類',[],'');
+
+  // L9 作業環境監測
+  if(c.mon === 'os' || c.mon === 'sc'){
+    R('L9','act','應實施化學性因子作業環境監測',[
+      c.mon === 'os' ? '屬監測辦法附表一（有機溶劑作業場所）應監測項目' : '屬監測辦法附表二（特定化學物質作業場所）應監測項目',
+      '每6個月監測1次以上；勞工暴露濃度達容許濃度以上者每3個月1次（第6條，116年1月1日施行之修正條文）',
+      '監測計畫應於實施10日前通報；監測結果於採樣後45日內通報（第9、12條）',
+      '臨時性作業、作業時間短暫或僅作貯存且評估無暴露之虞者，得不依第6條監測（第7條）'],'勞工作業環境監測實施辦法第6、7、9、12條，附表一、二');
+  } else if(hasPel) R('L9','below','非第6條附表所列監測項目',['定有容許濃度，仍應依評估分級辦法評估勞工暴露'],'勞工作業環境監測實施辦法第6條');
+  else R('L9','na','非應監測項目',[],'');
+
+  // L10 設施規則
+  const fac = [];
+  if(c.st === 'l' && fp != null && fp < 65) fac.push('屬第11條所稱「引火性液體」（閃火點未滿65°C）');
+  if(gs.has('FG1') || gs.has('FG2')) fac.push('屬第11條所稱「可燃性氣體」');
+  if(g.some(x => x.startsWith('OXL'))) fac.push('具氧化性，依第11條氧化性物質規定判定');
+  if(fac.length) R('L10','apply','屬設施規則之危險物',[...fac,'製造、處置、使用或儲存時，應依設施規則有關危險物之規定採取防火防爆措施（如禁止煙火、通風換氣、消除靜電、防爆電氣設備）'],'職業安全衛生設施規則第11條及危險物相關規定');
+  else R('L10','na', thin ? '未建閃火點等物性資料，無法判定是否屬危險物' : '非設施規則第11條所稱危險物',[],'');
+
+  // L11 優先管理化學品
+  {
+    const lines = []; let lv = 'na';
+    if(c.p1 === 'Y'){ lv='act'; lines.push('第2條第1款（附表一）：運作即應報請備查（第6條第1項第1款）'); }
+    const cat1 = g.filter(x => PMC2_CAT1.includes(x)), cat2 = g.filter(x => PMC2_1T.includes(x));
+    if(cat1.length && w >= 1){ lv='act'; lines.push('附表二：'+ghsText(cat1)+'，濃度≥1%即應報請備查（不論數量）'); }
+    else if(cat2.length && w >= 1){
+      const t = annualKg/1000;
+      if(t >= 1){ lv='act'; lines.push('附表二：'+ghsText(cat2)+'，濃度≥1% 且任一運作行為年運作總量 '+fmt(t,2)+' t ≥ 1 t，應報請備查'+(annualEst?'（年運作量未填，以最大存量估算）':'')); }
+      else { if(RANK[lv] < 1) lv='below'; lines.push('附表二：'+ghsText(cat2)+'，年運作總量 '+fmt(t,2)+' t 未達 1 t'+(annualEst?'（以最大存量估算，請填年運作量）':'')); }
+    }
+    const p3 = g.filter(x => PMC3[x] != null);
+    if(p3.length){
+      const crit = Math.min(...p3.map(x => PMC3[x]));
+      const t = kg/1000, r = t/crit; out.ratio.pmc3 = r; out.ratio.pmc3crit = crit;
+      const which = p3.filter(x => PMC3[x] === crit).map(x => GHS[x]).join('、');
+      if(r >= 1){ lv='act'; lines.push('附表三：臨界量 '+crit+' t（'+which+'），最大運作總量 '+fmt(t,2)+' t ≥ 臨界量，應報請備查'); }
+      else { if(RANK[lv] < 1) lv='below'; lines.push('附表三：臨界量 '+crit+' t（'+which+'），最大運作總量 '+fmt(t,3)+' t = '+fmt(r*100,2)+'%'+(r <= 0.02 ? '，≤2% 免納入總和計算' : '，納入多品項總和計算')); }
+      if(p3.some(x => x==='FL2'||x==='FL3')) lines.push('易燃液體第2、3級若儲存溫度超過沸點，臨界量為10 t；高溫高壓特定製程為50 t');
+    }
+    if(lv === 'act') lines.push('首次報備後：附表二每年4~9月、附表三每年1月及7月定期報備；超過已備查量達臨界量時30日內動態備查（第8、9條）');
+    if(lines.length){
+      lines.push('第2條第2、3款以經勞動部指定公告者為限，請於化學品報備與許可平台確認是否在指定清單');
+      R('L11', lv, lv==='act' ? '應報請備查' : '未達報備門檻', lines, '優先管理化學品之指定及運作管理辦法第2、6、8、9條，附表一~三');
+    } else R('L11','na', noGhs ? '未建GHS分類，無法判定附表二、三' : '無對應之危害分類', noGhs ? [NOGHS] : [],'');
+  }
+
+  // L13 特定化學物質
+  if(c.sc) R('L13','act','特定化學物質'+c.sc,['應依特定化學物質危害預防標準辦理（設施、作業主管、洩漏預防、作業管理及健康管理等）'],'特定化學物質危害預防標準');
+  else if(c.note && c.note.includes('特定化學物質')) R('L13','apply','視成分判定',[c.note],'特定化學物質危害預防標準');
+  else R('L13','na','非特定化學物質',[],'');
+
+  // L14 毒性及關注化學物質
+  const concText = v => /濃度/.test(String(v)) ? String(v) : String(v) + '% 以上';
+  if(c.toxno){
+    const cl = c.toxcls || '';
+    const conc = num(c.toxc);
+    if(conc != null && w < conc){
+      R('L14','below','濃度未達毒化物管制濃度',['列管編號 '+c.toxno+'（第'+cl+'類），管制濃度 '+c.toxc+'%；本品含量 '+w+'% 未達'],'列管毒性化學物質及其運作管理事項附表一');
+    } else {
+      const lines = ['列管編號 '+c.toxno+'，第'+cl.split(',').join('、')+'類毒性化學物質；管制濃度 '+concText(c.toxc),
+        num(c.toxq) ? '分級運作量 '+fmt(num(c.toxq),0)+' kg；目前存量約 '+fmt(kg,0)+' kg'+(num(c.toxq) <= kg ? '，已達分級運作量' : '，未達分級運作量')+'（影響應取得之文件種類及事故預防應變規定）' : '無分級運作量（僅第四類毒性）'];
+      lines.push(/[123]/.test(cl) ? '運作前應依毒性及關注化學物質許可登記核可管理辦法取得許可證、登記文件或核可文件，並按規定申報運作紀錄' : '第四類毒性化學物質運作前應取得核可文件，並按規定申報運作紀錄');
+      R('L14','act','列管毒性化學物質',lines,'毒性及關注化學物質管理法；列管毒性化學物質及其運作管理事項（115.04.27修正）附表一');
+    }
+  }
+  if(c.ccno){
+    const conc = num(c.ccc);
+    if(conc != null && w < conc){
+      R('L14','below','濃度未達關注化學物質管制濃度',['列管編號 '+c.ccno+'（'+c.cccat+'），管制濃度 '+c.ccc+'%；本品含量 '+w+'% 未達'],'列管關注化學物質及其運作管理事項');
+    } else {
+      const lines = ['列管編號 '+c.ccno+'，'+c.cccat+'關注化學物質；管制濃度 '+concText(c.ccc),
+        '製造、輸入、販賣、使用、貯存前應取得核可文件；運作應逐筆記錄並每月申報'];
+      if(c.cch === 'Y'){
+        const q = num(c.ccq), qt = num(c.cct);
+        lines.push('屬具有危害性之關注化學物質：運作總量達分級運作量 '+(q?fmt(q,0)+' kg':'—')+'（運送 '+(qt?fmt(qt,0)+' kg':'—')+'）以上者，適用毒管法事故預防及緊急應變專章（危害預防及應變計畫、責任保險、專業應變人員、偵測警報設備等）'+(q ? '；目前存量約 '+fmt(kg,0)+' kg'+(kg >= q ? '，已達' : '，未達') : ''));
+      }
+      if(String(c.cccat).includes('食安')) lines.push('包裝容器應以中文記明「禁止用於食品」');
+      R('L14','act','列管關注化學物質',lines,'毒性及關注化學物質管理法；列管關注化學物質及其運作管理事項附表一~三');
+    }
+  }
+  if(!c.toxno && !c.ccno) R('L14','na','非列管毒性化學物質或關注化學物質',[],'');
+
+  // L15 勞動檢查法
+  if(c.lsat && num(c.lsaq)){
+    const q = kg * w / 100, r = q / num(c.lsaq); out.ratio.lsa = r;
+    const head = '勞動檢查法施行細則附表'+(c.lsat==='危險物'?'一（危險物）':'二（有害物）')+'規定數量 '+fmt(num(c.lsaq),0)+' kg；以純物質計約 '+fmt(q,0)+' kg（'+fmt(r,2)+' 倍）';
+    if(r >= 1) R('L15','act','屬甲類危險性工作場所',[head,'應於使勞工作業30日前向勞動檢查機構申請審查（危險性工作場所審查及檢查辦法第2、4條）','應每5年或製程修改時實施製程安全評估並報請備查（製程安全評估定期實施辦法第4、8條）'],'勞動檢查法第26條第1項第5款；施行細則第29條',r);
+    else R('L15','below','未達規定數量（'+fmt(r,2)+' 倍）',[head,'事業單位內500 m以內之工作場所應合併計算'],'勞動檢查法施行細則第29條',r);
+  } else R('L15','na','非施行細則附表一、二所列物質',[],'');
+
+  // L16 先驅化學品
+  if(c.pre === '甲類') R('L16','act','甲類先驅化學品',['自行登錄簿冊，並於每季結束後1個月內申報上一季簿冊影本（第6條）','簿冊及憑證保存3年（第8條）'],'先驅化學品工業原料之種類及申報檢查辦法第3、6、8條');
+  else if(c.pre === '乙類') R('L16','act','乙類先驅化學品',['應自行登錄簿冊：輸出入、種類、數量、場所、交易廠商、報單號碼及發票號碼（第6條第1項第2款）','簿冊及憑證保存3年（第8條）'],'先驅化學品工業原料之種類及申報檢查辦法第3、6、8條');
+  else R('L16','na','非先驅化學品',c.note && c.note.includes('先驅') ? [c.note] : [],'');
+
+  res.sort((a,b) => LAW_ORDER.indexOf(a.law) - LAW_ORDER.indexOf(b.law));
+  return out;
+}
+
+function evaluateAll(){
+  const items = [], unknown = [];
+  rows.forEach((r,i) => {
+    if(!r.id || !CHEMS[r.id]){ if(String(r.text||'').trim()) unknown.push({i, text:r.text}); return; }
+    if(!(num(r.qty) > 0)) return;
+    const it = evaluate(r);
+    it.idx = i; it.byLaw = {};
+    it.res.forEach(x => { const b = it.byLaw[x.law]; if(!b || RANK[x.level] > RANK[b.level]) it.byLaw[x.law] = x; });
+    it.nAct = LAW_ORDER.filter(k => it.byLaw[k] && it.byLaw[k].level === 'act').length;
+    items.push(it);
+  });
+  const sum = k => items.reduce((s,it) => s + (it.ratio[k] || 0), 0);
+  const pd = sum('pd');
+  const pmc3 = items.reduce((s,it) => s + ((it.ratio.pmc3 || 0) > 0.02 ? it.ratio.pmc3 : 0), 0);
+  const lsaMax = items.reduce((m,it) => Math.max(m, it.ratio.lsa || 0), 0);
+  const totals = [
+    {k:'公共危險物品 商數和', v:pd, hit:pd > 1 || items.some(it => (it.ratio.pd||0) >= 1), s: pd > 1 ? '達管制量（同場所儲存）' : '未達管制量', basis:'公危辦法附表一備註二'},
+    {k:'工廠危險物品 綜合管制指數', v:pd, hit:pd > 1 || items.some(it => (it.ratio.pd||0) >= 1), s: (pd > 1 || items.some(it => (it.ratio.pd||0) >= 1)) ? '應向地方主管機關申報' : '免申報', basis:'工廠危險物品申報辦法第9條'},
+    {k:'優先管理 附表三 總和', v:pmc3, hit:pmc3 >= 1, s: pmc3 >= 1 ? '應報請備查' : '未達臨界量', basis:'優先管理辦法第6條第1項第4款'},
+    {k:'勞檢 危險物/有害物 最大倍數', v:lsaMax, hit:lsaMax >= 1, s: lsaMax >= 1 ? '甲類危險性工作場所' : '未達規定數量', basis:'勞動檢查法施行細則第29條'}
+  ];
+  return {items, unknown, totals};
+}
+
+/* ---------- UI: input rows ---------- */
+function save(){ store.set('crq.rows', rows); store.set('crq.settings', settings); }
+function fillDatalist(){
+  $('#chemList').innerHTML = Object.values(CHEMS).sort((a,b) => a.n.localeCompare(b.n,'zh-Hant')).map(c => '<option value="'+esc(label(c))+'">').join('');
+}
+const blankRow = () => ({text:'',id:'',qty:'',unit:'L',annual:''});
+const filled = r => String(r.text||'').trim() !== '' || String(r.qty||'').trim() !== '';
+function renderRows(){
+  const box = $('#rows');
+  if(!rows.length) rows.push(blankRow());
+  box.innerHTML = rows.map((r,i) => {
+    const tag = tagText(r);
+    return '<div class="inrow" data-i="'+i+'">'+
+      '<button class="go" id="go-'+i+'" data-go="'+i+'" title="查看判定明細" aria-label="查看第 '+(i+1)+' 列判定明細">'+(i+1)+'</button>'+
+      '<input class="ci" list="chemList" id="chem-'+i+'" data-k="text" value="'+esc(r.text)+'" placeholder="名稱或 CAS" aria-label="第 '+(i+1)+' 列化學品">'+
+      '<input class="qi" type="number" min="0" step="any" id="qty-'+i+'" data-k="qty" value="'+esc(r.qty)+'" placeholder="最大存量" inputmode="decimal" aria-label="第 '+(i+1)+' 列最大存量" title="'+esc(convText(r))+'">'+
+      '<select id="unit-'+i+'" data-k="unit" aria-label="單位"><option'+(r.unit==='L'?' selected':'')+'>L</option><option'+(r.unit==='kg'?' selected':'')+'>kg</option></select>'+
+      '<input type="number" min="0" step="any" id="annual-'+i+'" data-k="annual" value="'+esc(r.annual)+'" placeholder="年運作量" inputmode="decimal" aria-label="第 '+(i+1)+' 列年運作量（同單位）">'+
+      '<button class="rm" aria-label="刪除第 '+(i+1)+' 列" data-rm="'+i+'">✕</button>'+
+      '<div class="tag'+(r.text && !CHEMS[r.id] ? ' bad' : '')+'" id="tag-'+i+'"'+(tag ? '' : ' hidden')+'>'+esc(tag)+'</div>'+
+    '</div>';
+  }).join('');
+  updateRowCount();
+}
+function updateRowCount(){
+  const n = rows.filter(r => String(r.text||'').trim()).length;
+  $('#rowCount').textContent = n ? '（'+n+' 項）' : '';
+}
+// 只在有問題時顯示提示，讓清單保持一列一個化學品
+function tagText(r){
+  const c = CHEMS[r.id];
+  if(!String(r.text||'').trim()) return '';
+  if(!c) return '資料庫查無此化學品，請改用 CAS 或至「化學品資料庫」新增';
+  if(!(num(r.qty) > 0)) return '請輸入最大存量';
+  if(num(c.d) == null && r.unit === 'L') return '密度未建檔，以 1 kg/L 換算，建議改用 kg 輸入';
+  return '';
+}
+function convText(r){
+  const c = CHEMS[r.id], q = num(r.qty);
+  if(!c || !(q > 0)) return '';
+  const d = num(c.d);
+  if(d == null) return c.n+'：密度未建檔';
+  return c.n+'　密度 '+d+' kg/L　≈ '+(r.unit==='L' ? fmt(q*d,1)+' kg' : fmt(q/d,1)+' L');
+}
+function refreshRowMeta(i){
+  const t = $('#tag-'+i), tag = tagText(rows[i]);
+  t.textContent = tag; t.hidden = !tag;
+  t.className = 'tag' + (rows[i].text && !CHEMS[rows[i].id] ? ' bad' : '');
+  $('#qty-'+i).title = convText(rows[i]);
+}
+let resultsTimer;
+function scheduleResults(){ clearTimeout(resultsTimer); resultsTimer = setTimeout(renderResults, 150); }
+$('#rows').addEventListener('input', e => {
+  const row = e.target.closest('.inrow'); if(!row) return;
+  const i = +row.dataset.i, k = e.target.dataset.k; if(!k) return;
+  rows[i][k] = e.target.value;
+  if(k === 'text'){ const c = resolveChem(e.target.value); rows[i].id = c ? c.id : ''; updateRowCount(); }
+  refreshRowMeta(i);
+  save(); scheduleResults();
+});
+$('#rows').addEventListener('change', e => {
+  const t = e.target; if(t.dataset.k !== 'text') return;
+  const i = +t.closest('.inrow').dataset.i, c = CHEMS[rows[i].id];
+  if(c && t.value !== label(c)){ t.value = label(c); rows[i].text = label(c); save(); }
+});
+$('#rows').addEventListener('click', e => {
+  const go = e.target.closest('[data-go]'); if(go){ jumpTo(+go.dataset.go); return; }
+  const b = e.target.closest('[data-rm]'); if(!b) return;
+  rows.splice(+b.dataset.rm, 1); view.expanded.clear(); save(); renderRows(); renderResults();
+});
+$('#btnAdd').onclick = () => { rows.push(blankRow()); save(); renderRows(); const el = $('#chem-'+(rows.length-1)); if(el){ el.scrollIntoView({block:'nearest'}); el.focus(); } };
+$('#btnSample').onclick = () => { rows = JSON.parse(JSON.stringify(SAMPLE_ROWS)); view.expanded.clear(); save(); renderRows(); renderResults(); };
+// 清空要按兩次，避免一百筆清單被誤刪
+let clearArmed = null;
+$('#btnClear').onclick = () => {
+  const b = $('#btnClear');
+  if(!clearArmed){ b.textContent = '再按一次確定清空'; clearArmed = setTimeout(() => { b.textContent = '清空'; clearArmed = null; }, 3000); return; }
+  clearTimeout(clearArmed); clearArmed = null; b.textContent = '清空';
+  rows = []; view.expanded.clear(); save(); renderRows(); renderResults(); toast('已清空清單');
+};
+function bindSetting(id, key){
+  const el = $(id); el.value = settings[key] || '';
+  el.addEventListener('input', () => { settings[key] = el.value; save(); scheduleResults(); });
+}
+bindSetting('#refDate','date'); bindSetting('#sWorkers','workers'); bindSetting('#sSpecial','special'); bindSetting('#sVol','vol');
+
+/* ---------- 批次貼上與匯入盤點表 ---------- */
+const CAS_RE = /\b\d{2,7}-\d{2}-\d\b/;
+const UNIT_MAP = [[/^(l|lt|ltr|公升|升)$/i,'L',1],[/^(ml|毫升|cc)$/i,'L',0.001],[/^(m3|m³|立方公尺|立方米)$/i,'L',1000],
+  [/^(kg|kgs|公斤|千克)$/i,'kg',1],[/^(g|公克|克)$/i,'kg',0.001],[/^(t|ton|tons|mt|公噸|噸)$/i,'kg',1000]];
+function unitOf(s){ s = String(s||'').trim().replace(/[()（）]/g,''); if(!s) return null; for(const [re,u,f] of UNIT_MAP) if(re.test(s)) return {u,f}; return null; }
+function parseQty(s){
+  const m = String(s||'').replace(/[,，\s]/g,'').match(/^(\d+(?:\.\d+)?)(.*)$/);
+  if(!m) return null;
+  const u = unitOf(m[2]);
+  if(m[2] && !u) return null;
+  return {v:+m[1], unit:u};
+}
+const tidy = v => String(Math.round(v * 1e6) / 1e6);
+function parseList(text){
+  const out = [];
+  String(text||'').split(/\r?\n/).forEach(line => {
+    if(!line.trim()) return;
+    let cells = line.includes('\t') ? line.split('\t') : line.trim().split(/\s+|，|；|;|,\s+/);
+    cells = cells.map(s => s.trim()).filter(Boolean);
+    if(!cells.length) return;
+    const casCell = cells.find(s => CAS_RE.test(s));
+    const cas = casCell ? casCell.match(CAS_RE)[0] : '';
+    const qtys = [], words = []; let unit = null;
+    cells.forEach(s => {
+      const q = parseQty(s);
+      if(q && !CAS_RE.test(s)){ qtys.push(q); return; }
+      const u = unitOf(s);
+      if(u){ if(!unit) unit = u; return; }
+      const w = s.replace(CAS_RE,'').replace(/[（(]\s*[)）]/g,'').trim();
+      if(w) words.push(w);
+    });
+    const name = words.join(' ');
+    if(!qtys.length && /名稱|品名|化學品|CAS|數量|存量|單位/i.test(line)) return;   // 表頭
+    if(!name && !cas) return;
+    const c = (cas && resolveChem(cas)) || resolveChem(name) || null;
+    const q0 = qtys[0] || null;
+    let u = (q0 && q0.unit) || unit;
+    if(!u) u = c && c.st === 'l' && num(c.d) != null ? {u:'L',f:1} : {u:'kg',f:1};
+    const r = {text: c ? label(c) : (name || cas), id: c ? c.id : '', qty: q0 ? tidy(q0.v * u.f) : '', unit: u.u, annual: ''};
+    if(qtys[1]){ const u2 = qtys[1].unit && qtys[1].unit.u === u.u ? qtys[1].unit : u; r.annual = tidy(qtys[1].v * u2.f); }
+    out.push(r);
+  });
+  return out;
+}
+function addRows(list, replace){
+  const isSample = JSON.stringify(rows.filter(filled)) === JSON.stringify(SAMPLE_ROWS);
+  const keep = (replace || isSample) ? [] : rows.filter(filled);
+  rows = keep.concat(list);
+  view.expanded.clear(); save(); renderRows(); renderResults();
+  const miss = list.filter(r => !r.id).length, noQty = list.filter(r => r.id && !(num(r.qty) > 0)).length;
+  toast('已'+(replace||isSample ? '建立' : '加入')+' '+list.length+' 筆'+(miss ? '，'+miss+' 筆查無資料' : '')+(noQty ? '，'+noQty+' 筆缺數量' : '')+(miss||noQty ? '（見左側提示）' : ''));
+}
+function togglePaste(show){
+  $('#pasteBox').hidden = !show; $('#btnPaste').setAttribute('aria-expanded', show);
+  if(show) $('#pasteText').focus();
+}
+$('#btnPaste').onclick = () => togglePaste($('#pasteBox').hidden);
+$('#btnPasteCancel').onclick = () => togglePaste(false);
+function applyPaste(replace){
+  const list = parseList($('#pasteText').value);
+  if(!list.length){ toast('沒有讀到化學品，請確認每列至少有名稱或 CAS'); return; }
+  $('#pasteText').value = ''; togglePaste(false); addRows(list, replace);
+}
+$('#btnPasteAdd').onclick = () => applyPaste(false);
+$('#btnPasteReplace').onclick = () => applyPaste(true);
+$('#btnInv').onclick = () => { if(typeof XLSX === 'undefined'){ toast('Excel 元件尚未載入，請稍後再試'); return; } $('#fileInv').click(); };
+$('#fileInv').addEventListener('change', async e => {
+  const file = e.target.files[0]; if(!file) return;
+  try{
+    const wb = XLSX.read(await file.arrayBuffer(), {type:'array'});
+    const aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, defval:''}).map(r => r.map(x => String(x).trim()));
+    const hi = aoa.slice(0, 15).findIndex(r => r.some(x => /名稱|品名|化學品|物質|CAS/i.test(x)) && r.some(x => /數量|存量|量/.test(x)));
+    let lines;
+    if(hi >= 0){
+      const h = aoa[hi];
+      const col = (re, not) => h.findIndex(x => re.test(x) && !(not && not.test(x)));
+      const ci = {name: col(/名稱|品名|化學品|物質|chemical|name/i, /CAS/i), cas: col(/CAS/i),
+        qty: col(/最大|存量/) >= 0 ? col(/最大|存量/) : col(/數量|qty|quantity/i, /年/), unit: col(/單位|unit/i), annual: col(/年/)};
+      const hdrUnit = ci.qty >= 0 ? (h[ci.qty].match(/[（(]\s*([^)）]+)\s*[)）]/) || [])[1] : '';
+      lines = aoa.slice(hi + 1).filter(r => r.some(Boolean)).map(r => {
+        const g = k => ci[k] >= 0 ? r[ci[k]] : '';
+        const unit = g('unit') || hdrUnit || '';
+        return [g('name'), g('cas'), g('qty') ? g('qty') + unit : '', g('annual') ? g('annual') + unit : ''].join('\t');
+      });
+    } else lines = aoa.filter(r => r.some(Boolean)).map(r => r.join('\t'));
+    const list = parseList(lines.join('\n'));
+    if(!list.length) toast('盤點表中沒有讀到化學品');
+    else addRows(list, false);
+  }catch(err){ toast('匯入失敗：'+err.message); }
+  e.target.value = '';
+});
+
+/* ---------- UI: results ---------- */
+// 總覽矩陣的欄位順序與簡稱（依實務上最常追蹤的義務排序）
+const OV = [['L7','公危'],['L12','工廠申報'],['L11','優先管理'],['L14','毒化/關注'],['L9','環境監測'],['L3','有機溶劑'],['L13','特化'],
+  ['L4','容許濃度'],['L8','評估分級'],['L2','危害通識'],['L15','勞檢'],['L16','先驅'],['L5','道路運送'],['L6','廢棄物'],['L10','設施規則'],['L1','職安法']];
+const OV_NAME = Object.fromEntries(OV);
+const SC_SHORT = {'甲類':'甲類','乙類':'乙類','丙類第一種':'丙1','丙類第二種':'丙2','丙類第三種':'丙3','丁類':'丁類'};
+const view = Object.assign({mode:'overview', q:'', law:'', onlyAct:false, showNA:false, sortKey:'', sortDir:-1, allOpen:null, side:true}, store.get('crq.view', {}));
+view.expanded = new Set(); view.openLaws = new Set();
+function saveView(){ store.set('crq.view', {mode:view.mode, side:view.side}); }
+let LAST = {items:[], unknown:[], totals:[]};
+
+// 只有法規清單資料（缺閃火點、GHS、UN）時，這些法規是「無法判定」而非「不適用」
+const DATA_DEP = new Set(['L5','L6','L7','L10','L11','L12']);
+const unknownCell = (it, law) => it.chem.src === LIST_SRC && DATA_DEP.has(law) && (!it.byLaw[law] || it.byLaw[law].level === 'na');
+function cellText(it, law){
+  const r = it.byLaw[law], c = it.chem;
+  if(unknownCell(it, law)) return '?';
+  if(!r || r.level === 'na') return '·';
+  switch(law){
+    case 'L7': case 'L12': case 'L15': return r.ratio != null ? fmt(r.ratio, r.ratio < 10 ? 2 : 1)+'倍' : '適用';
+    case 'L3': return '第'+c.os+'種';
+    case 'L13': return SC_SHORT[c.sc] || '視成分';
+    case 'L14': return r.level === 'below' ? '未達' : [c.toxno ? '毒'+(c.toxcls||'') : '', c.ccno ? '關注' : ''].filter(Boolean).join('/');
+    case 'L4': return it.pelEff || '有';
+    case 'L9': return r.level === 'act' ? '6個月' : '未列';
+    case 'L11': return r.level === 'act' ? '報備' : '未達';
+    case 'L16': return c.pre || '適用';
+    case 'L5': return r.level === 'act' ? '通行證' : '適用';
+  }
+  return {act:'需辦理', apply:'適用', below:'未達'}[r.level];
+}
+function matchesFilter(it){
+  const q = view.q.trim().toLowerCase();
+  if(q && !(it.chem.n+' '+(it.chem.a||'')+' '+it.chem.cas+' '+(it.row.text||'')).toLowerCase().includes(q)) return false;
+  if(view.law){
+    const r = it.byLaw[view.law];
+    if(!r || r.level === 'na') return false;
+    if(view.onlyAct && r.level !== 'act') return false;
+  } else if(view.onlyAct && !it.nAct) return false;
+  return true;
+}
+function lawRowsFor(it){
+  return it.res.filter(r => (view.showNA || r.level !== 'na') && (!view.onlyAct || r.level === 'act'));
+}
+function actSummary(it){
+  return OV.filter(([k]) => it.byLaw[k] && it.byLaw[k].level === 'act').map(([k,n]) => { const t = cellText(it,k); return t === '需辦理' ? n : n+' '+t; }).join('、');
+}
+function cardBody(it){
+  const c = it.chem, chips = [];
+  if(c.pdc && it.ratio.pd != null) chips.push(c.pdt+' '+fmt(it.ratio.pd,1)+' 倍');
+  if(c.os) chips.push('第'+c.os+'種有機溶劑');
+  if(c.sc) chips.push('特化'+c.sc);
+  if(c.toxno) chips.push('毒化物 '+c.toxno);
+  if(c.ccno) chips.push('關注化學物質 '+c.ccno);
+  if(c.un) chips.push('UN '+c.un);
+  const lr = lawRowsFor(it);
+  return (chips.length ? '<div class="chips">'+chips.map(x => '<span class="chip">'+esc(x)+'</span>').join('')+'</div>' : '')+
+    (lr.length ? '' : '<div class="sum">沒有符合目前篩選條件的法規項目。</div>')+
+    lr.map(r => '<div class="law"><span class="pill '+r.level+'">'+LEVEL[r.level]+'</span><div><div class="name">'+esc(LAWS[r.law])+'</div>'+
+      '<div class="title">'+esc(r.title)+'</div>'+(r.lines.length ? '<ul>'+r.lines.map(l => '<li>'+esc(l)+'</li>').join('')+'</ul>' : '')+
+      (r.basis ? '<div class="basis">依據：'+esc(r.basis)+'</div>' : '')+'</div></div>').join('')+
+    (c.note ? '<div class="law"><span class="pill na">備註</span><div style="font-size:.88rem">'+esc(c.note)+'</div></div>' : '')+
+    (it.dUnknown || c.src === LIST_SRC ? '<div class="law"><span class="pill apply">資料</span><div style="font-size:.88rem">此筆僅有法規清單資料'+(it.dUnknown ? '，密度未建檔（以 1 kg/L 換算）' : '')+'；閃火點、GHS 分類、UN 編號等請依 SDS 至「化學品資料庫」補登，以完成公危、工廠申報、優先管理、運輸等判定。</div></div>' : '');
+}
+function cardHead(it, toggle, open){
+  const c = it.chem;
+  return '<header'+(toggle ? ' class="toggle" data-toggle="'+it.idx+'" role="button" tabindex="0" aria-expanded="'+open+'"' : '')+'>'+
+    '<h3>'+(toggle ? '<span class="caret">'+(open ? '▾' : '▸')+'</span> ' : '')+'<span class="mono meta">#'+(it.idx+1)+'</span> '+esc(c.n)+' <span class="mono meta">'+esc(c.cas)+'</span></h3>'+
+    '<span class="meta mono">'+fmt(it.qty,2)+' '+it.unit+' ≈ '+(it.unit === 'L' ? fmt(it.kg,1)+' kg' : fmt(it.L,1)+' L')+(c.w && c.w < 100 ? '　含量 '+c.w+'%' : '')+
+    '　<span class="pill '+(it.nAct ? 'act' : 'below')+'">需辦理 '+it.nAct+'</span></span></header>';
+}
+
+function renderOverview(list){
+  if(view.sortKey){
+    const k = view.sortKey, d = view.sortDir;
+    const val = it => k === 'name' ? it.chem.n : k === 'qty' ? it.kg : k === 'nact' ? it.nAct
+      : (r => r ? RANK[r.level] * 1e7 + (r.ratio || 0) : -1)(it.byLaw[k]);
+    list = list.slice().sort((a,b) => { const va = val(a), vb = val(b); return (typeof va === 'string' ? va.localeCompare(vb,'zh-Hant') : va - vb) * d; });
+  }
+  const cols = view.law ? OV.filter(([k]) => k === view.law).concat(OV.filter(([k]) => k !== view.law)) : OV;
+  const th = (key, text, cls) => {
+    const s = view.sortKey === key ? (view.sortDir > 0 ? 'ascending' : 'descending') : '';
+    return '<th'+(cls ? ' class="'+cls+'"' : '')+' data-sort="'+key+'"'+(s ? ' aria-sort="'+s+'"' : '')+' title="點選排序">'+text+(s ? (view.sortDir > 0 ? ' ▲' : ' ▼') : '')+'</th>';
+  };
+  const ncol = cols.length + 3;
+  return '<div class="legend"><span><i style="background:var(--act-soft);outline:1px solid var(--act)"></i>需辦理</span><span><i style="background:var(--apply-soft);outline:1px solid var(--apply)"></i>適用</span>'+
+    '<span><i style="background:var(--below-soft);outline:1px solid var(--below)"></i>未達門檻</span><span>· 不適用</span><span>? 資料不足（請依 SDS 補登）</span><span>點化學品列展開明細，點欄位標題排序</span></div>'+
+    '<div class="ovwrap" id="ovwrap"><table class="ov"><thead><tr>'+th('name','化學品','first')+th('qty','數量')+th('nact','需辦理')+
+    cols.map(([k,n]) => th(k, n)).join('')+'</tr></thead><tbody>'+
+    list.map(it => {
+      const open = view.expanded.has(it.idx);
+      return '<tr class="row'+(open ? ' open' : '')+'" data-row="'+it.idx+'" tabindex="0" aria-expanded="'+open+'">'+
+        '<td class="first"><div class="nm">'+esc(it.chem.n)+'</div><div class="cas">#'+(it.idx+1)+'　'+esc(it.chem.cas)+'</div></td>'+
+        '<td class="num">'+fmt(it.qty,1)+' '+it.unit+'</td><td class="num">'+(it.nAct ? '<span class="pill act">'+it.nAct+'</span>' : '0')+'</td>'+
+        cols.map(([k,n]) => { const r = it.byLaw[k], lv = r ? r.level : 'na', unk = unknownCell(it,k);
+          return '<td class="c '+(unk ? 'na unk' : lv)+'" title="'+esc(LAWS[k]+'：'+(unk ? '資料不足，請依SDS補登閃火點、GHS分類、UN編號後判定' : r ? LEVEL[lv]+'，'+r.title : '不適用'))+'">'+esc(cellText(it,k))+'</td>'; }).join('')+
+        '</tr>'+(open ? '<tr class="detailrow"><td class="detail" colspan="'+ncol+'"><div class="detailwrap"><article class="card" id="card-'+it.idx+'">'+cardHead(it,false,true)+cardBody(it)+'</article></div></td></tr>' : '');
+    }).join('')+'</tbody></table></div>';
+}
+function renderChemCards(list){
+  const auto = view.allOpen == null ? list.length <= 3 : view.allOpen;
+  return list.map(it => {
+    const open = auto || view.expanded.has(it.idx);
+    return '<article class="card'+(open ? '' : ' collapsed')+'" id="card-'+it.idx+'">'+cardHead(it,true,open)+
+      (open ? cardBody(it) : '<div class="sum">'+(it.nAct ? '需辦理：'+esc(actSummary(it)) : '沒有需辦理事項')+'</div>')+'</article>';
+  }).join('');
+}
+function renderLawView(list){
+  const totalsBy = {L7:LAST.totals[0], L12:LAST.totals[1], L11:LAST.totals[2], L15:LAST.totals[3]};
+  const laws = view.law ? OV.filter(([k]) => k === view.law) : OV;
+  const secs = laws.map(([k]) => {
+    const entries = list.map(it => ({it, r:it.byLaw[k]})).filter(e => e.r && e.r.level !== 'na' && (!view.onlyAct || e.r.level === 'act'));
+    entries.sort((a,b) => RANK[b.r.level] - RANK[a.r.level] || (b.r.ratio || 0) - (a.r.ratio || 0));
+    return {k, entries};
+  });
+  const active = secs.filter(s => s.entries.length), empty = secs.filter(s => !s.entries.length);
+  if(!active.length) return '<div class="card empty">沒有符合條件的法規項目。</div>';
+  return active.map(({k, entries}) => {
+    const cnt = lv => entries.filter(e => e.r.level === lv).length;
+    const open = view.openLaws.has(k) || !!view.law;
+    const t = totalsBy[k];
+    return '<details class="lawsec" data-law="'+k+'"'+(open ? ' open' : '')+'><summary><span class="ln">'+esc(LAWS[k])+'</span>'+
+      (cnt('act') ? '<span class="pill act">需辦理 '+cnt('act')+'</span>' : '')+(cnt('apply') ? '<span class="pill apply">適用 '+cnt('apply')+'</span>' : '')+
+      (cnt('below') ? '<span class="pill below">未達 '+cnt('below')+'</span>' : '')+
+      (t ? '<span class="ix">'+esc(t.k)+' '+fmt(t.v,2)+'</span>' : '')+'</summary>'+
+      '<div class="tablewrap"><table><thead><tr><th>#</th><th>化學品</th><th>數量</th><th>判定</th><th>摘要</th><th>倍數</th></tr></thead><tbody>'+
+      entries.map(({it, r}) => '<tr><td class="num">'+(it.idx+1)+'</td><td><button class="linkbtn" data-jump="'+it.idx+'">'+esc(it.chem.n)+'</button><div class="mono meta" style="font-size:.7rem;color:var(--muted)">'+esc(it.chem.cas)+'</div></td>'+
+        '<td class="num">'+fmt(it.qty,1)+' '+it.unit+'</td><td><span class="pill '+r.level+'">'+LEVEL[r.level]+'</span></td><td>'+esc(r.title)+'</td>'+
+        '<td class="num">'+(r.ratio != null ? fmt(r.ratio,2) : '')+'</td></tr>').join('')+'</tbody></table></div></details>';
+  }).join('')+(empty.length && !view.onlyAct ? '<p class="hint">無適用化學品的法規：'+empty.map(s => esc(OV_NAME[s.k])).join('、')+'</p>' : '');
+}
+
+function renderResults(){
+  const keep = $('#ovwrap') ? {top:$('#ovwrap').scrollTop, left:$('#ovwrap').scrollLeft} : null;
+  const data = LAST = evaluateAll();
+  const {items, unknown, totals} = data;
+  $('#stats').innerHTML = totals.map(t => '<div class="stat '+(t.hit?'act':'below')+'"><div class="k">'+esc(t.k)+'</div><div class="v">'+fmt(t.v,2)+'</div><div class="s">'+esc(t.s)+'</div></div>').join('');
+  // 左側編號依判定結果上色
+  const byIdx = new Map(items.map(it => [it.idx, it]));
+  rows.forEach((r,i) => {
+    const b = $('#go-'+i); if(!b) return;
+    const it = byIdx.get(i);
+    b.className = 'go' + (String(r.text||'').trim() && !CHEMS[r.id] ? ' bad' : it ? (it.nAct ? ' act' : ' ok') : '');
+    b.title = it ? (it.nAct ? '需辦理 '+it.nAct+' 項，點選查看明細' : '無需辦理事項，點選查看明細') : '查看判定明細';
+  });
+  syncControls();
+  const nAct = items.reduce((s,it) => s + it.nAct, 0);
+  const list = items.filter(matchesFilter);
+  const filtering = view.q.trim() || view.law || view.onlyAct;
+  $('#countInfo').textContent = items.length ? items.length+' 項化學品，共 '+nAct+' 項需辦理'+(filtering ? '；符合篩選 '+list.length+' 項' : '') : '';
+  if(!items.length && !unknown.length){ $('#results').innerHTML = '<div class="card empty">在左側輸入化學品與最大存量，或用「貼上清單」「匯入盤點表」一次加入多筆，這裡會列出各法規的判定結果。</div>'; return; }
+  let html = unknown.length ? '<p class="notice">'+unknown.length+' 項查無資料：'+unknown.map(u => '<button class="linkbtn" data-focus="'+u.i+'">#'+(u.i+1)+' '+esc(u.text)+'</button>').join('、')+'。請改用 CAS，或到「化學品資料庫」新增。</p>' : '';
+  if(!list.length && items.length) html += '<div class="card empty">沒有符合篩選條件的化學品。</div>';
+  else html += view.mode === 'overview' ? renderOverview(list) : view.mode === 'chem' ? renderChemCards(list) : renderLawView(list);
+  $('#results').innerHTML = html;
+  if(keep && $('#ovwrap')){ $('#ovwrap').scrollTop = keep.top; $('#ovwrap').scrollLeft = keep.left; }
+  sizeDetail();
+}
+function sizeDetail(){
+  const w = $('#ovwrap'); if(!w) return;
+  document.querySelectorAll('.detailwrap').forEach(d => d.style.width = w.clientWidth + 'px');
+}
+window.addEventListener('resize', sizeDetail);
+function syncControls(){
+  document.querySelectorAll('.seg [data-mode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === view.mode));
+  $('#rq').value !== view.q && ($('#rq').value = view.q);
+  $('#rlaw').value = view.law; $('#ronly').checked = view.onlyAct; $('#showNA').checked = view.showNA;
+  $('#naWrap').hidden = view.mode === 'law';
+  $('#cardBtns').style.display = view.mode === 'chem' ? 'flex' : 'none';
+  $('#side').hidden = !view.side;
+  $('#checkGrid').classList.toggle('collapsed', !view.side);
+  $('#btnSide').textContent = view.side ? '收合左側清單' : '展開左側清單';
+  $('#btnSide').setAttribute('aria-expanded', view.side);
+}
+function jumpTo(i){
+  const it = LAST.items.find(x => x.idx === i);
+  if(!it){ const el = $('#chem-'+i); if(el){ el.scrollIntoView({block:'nearest'}); el.focus(); } toast('第 '+(i+1)+' 列尚未完成，請確認化學品與最大存量'); return; }
+  if(!matchesFilter(it)){ view.q = ''; view.law = ''; view.onlyAct = false; }
+  if(view.mode === 'law') view.mode = 'chem';
+  view.expanded.add(i); saveView(); renderResults();
+  const card = $('#card-'+i); if(!card) return;
+  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  card.scrollIntoView({behavior: reduce ? 'auto' : 'smooth', block:'start'});
+  card.classList.remove('flash'); void card.offsetWidth; card.classList.add('flash');
+}
+function toggleRow(i){
+  view.expanded.has(i) ? view.expanded.delete(i) : view.expanded.add(i);
+  renderResults();
+}
+$('#results').addEventListener('click', e => {
+  const jump = e.target.closest('[data-jump]'); if(jump){ jumpTo(+jump.dataset.jump); return; }
+  const foc = e.target.closest('[data-focus]'); if(foc){ if(!view.side){ view.side = true; saveView(); syncControls(); } const el = $('#chem-'+foc.dataset.focus); if(el){ el.scrollIntoView({block:'nearest'}); el.focus(); } return; }
+  const th = e.target.closest('th[data-sort]');
+  if(th){ const k = th.dataset.sort; if(view.sortKey === k) view.sortDir = -view.sortDir; else { view.sortKey = k; view.sortDir = k === 'name' ? 1 : -1; } renderResults(); return; }
+  const tg = e.target.closest('[data-toggle]');
+  if(tg){ const i = +tg.dataset.toggle, auto = view.allOpen == null ? LAST.items.filter(matchesFilter).length <= 3 : view.allOpen;
+    if(auto){ view.allOpen = false; view.expanded = new Set(LAST.items.map(x => x.idx).filter(x => x !== i)); renderResults(); }
+    else toggleRow(i);
+    return; }
+  const row = e.target.closest('tr[data-row]'); if(row) toggleRow(+row.dataset.row);
+});
+$('#results').addEventListener('keydown', e => {
+  if(e.key !== 'Enter' && e.key !== ' ') return;
+  const t = e.target.closest('tr[data-row],[data-toggle]'); if(!t || t !== e.target) return;
+  e.preventDefault(); t.click();
+  const again = $(t.dataset.row != null ? 'tr[data-row="'+t.dataset.row+'"]' : '[data-toggle="'+t.dataset.toggle+'"]'); again && again.focus();
+});
+$('#results').addEventListener('toggle', e => {
+  const d = e.target; if(!d.matches || !d.matches('details.lawsec')) return;
+  d.open ? view.openLaws.add(d.dataset.law) : view.openLaws.delete(d.dataset.law);
+}, true);
+document.querySelectorAll('.seg [data-mode]').forEach(b => b.addEventListener('click', () => { view.mode = b.dataset.mode; saveView(); renderResults(); }));
+$('#rlaw').innerHTML = '<option value="">全部法規</option>' + OV.map(([k,n]) => '<option value="'+k+'">'+esc(n)+'－'+esc(LAWS[k])+'</option>').join('');
+$('#rq').addEventListener('input', e => { view.q = e.target.value; scheduleResults(); });
+$('#rlaw').addEventListener('change', e => { view.law = e.target.value; if(view.law && view.mode === 'overview' && !view.sortKey){ view.sortKey = view.law; view.sortDir = -1; } renderResults(); });
+$('#ronly').addEventListener('change', e => { view.onlyAct = e.target.checked; renderResults(); });
+$('#showNA').addEventListener('change', e => { view.showNA = e.target.checked; renderResults(); });
+$('#btnOpenAll').onclick = () => { view.allOpen = true; view.expanded.clear(); renderResults(); };
+$('#btnCloseAll').onclick = () => { view.allOpen = false; view.expanded.clear(); renderResults(); };
+$('#btnSide').onclick = () => { view.side = !view.side; saveView(); syncControls(); sizeDetail(); };
+
+/* ---------- UI: database tab ---------- */
+let editingId = null;
+function optList(f){ return f[3].map(o => { const [v,l] = o.includes(':') ? o.split(':') : [o,o||'（無）']; return [v, l]; }); }
+function renderForm(c){
+  $('#form').innerHTML = FIELDS.map(f => {
+    const v = c && c[f[0]] != null ? c[f[0]] : '';
+    if(f[2] === 'sel') return '<label>'+esc(f[1])+'<select id="f-'+f[0]+'">'+optList(f).map(([ov,ol]) => '<option value="'+esc(ov)+'"'+(String(v)===ov?' selected':'')+'>'+esc(ol)+'</option>').join('')+'</select></label>';
+    return '<label>'+esc(f[1])+'<input id="f-'+f[0]+'" '+(f[2]==='num'?'type="number" step="any" inputmode="decimal"':'')+' value="'+esc(v)+'"'+(f[0]==='id'&&c&&editingId?' readonly':'')+'></label>';
+  }).join('');
+}
+const DB_FILTERS = {
+  seed: c => (c.lists||[]).includes('seed'), pel: c => num(c.ppm) != null || num(c.mg) != null || !!c.pelno, mon: c => !!c.mon,
+  os: c => !!c.os, sc: c => !!c.sc, tox: c => !!c.toxno, cc: c => !!c.ccno, custom: c => (c.lists||[]).includes('custom')
+};
+function renderDb(){
+  CHEMS = allChems(); fillDatalist(); renderDbTable();
+}
+function renderDbTable(){
+  const q = $('#dbSearch').value.trim().toLowerCase(), f = $('#dbFilter').value;
+  let list = Object.values(CHEMS);
+  if(f) list = list.filter(DB_FILTERS[f]);
+  if(q) list = list.filter(c => (c.n+' '+(c.a||'')+' '+c.cas).toLowerCase().includes(q));
+  list.sort((a,b) => ((b.lists||[]).includes('seed') - (a.lists||[]).includes('seed')) || (a.pelno||9999) - (b.pelno||9999) || a.n.localeCompare(b.n,'zh-Hant'));
+  const total = list.length, LIMIT = 300;
+  $('#dbCount').textContent = '共 '+total+' 筆'+(total > LIMIT ? '，顯示前 '+LIMIT+' 筆，請用搜尋縮小範圍' : '');
+  const pel = c => (num(c.ppm)!=null ? fmt(num(c.ppm),4)+' ppm' : num(c.mg)!=null ? fmt(num(c.mg),4)+' mg/m³' : '—') + (c.sym ? ' '+esc(c.sym) : '');
+  $('#dbTable').innerHTML = '<thead><tr><th>化學品</th><th>CAS</th><th>容許濃度</th><th>有機溶劑／特化</th><th>監測</th><th>毒化物</th><th>關注化學物質</th><th>公共危險物品</th><th>資料來源</th><th></th></tr></thead><tbody>'+
+    list.slice(0, LIMIT).map(c => '<tr><td>'+esc(c.n)+'<div class="meta" style="font-size:.72rem;color:var(--muted)">'+esc((c.a||'').slice(0,48))+'</div></td><td class="mono">'+esc(c.cas)+'</td>'+
+      '<td>'+pel(c)+'</td><td>'+[c.os?'第'+c.os+'種有機溶劑':'', c.sc?'特化'+c.sc:''].filter(Boolean).join('、')+'</td>'+
+      '<td>'+(c.mon==='os'?'附表一':c.mon==='sc'?'附表二':'')+'</td><td>'+(c.toxno?esc(c.toxno+'（第'+c.toxcls+'類）'):'')+'</td>'+
+      '<td>'+(c.ccno?esc(c.ccno+' '+(c.cccat||'')):'')+'</td>'+
+      '<td>'+(c.pdc?esc(c.pdc+' '+(c.pdt||'')+(c.pds?'（'+c.pds+'）':'')+' '+c.pdq+' '+c.pdu):'')+'</td>'+
+      '<td>'+esc(c.src)+'</td><td><button class="small" data-edit="'+esc(c.id)+'">編輯</button></td></tr>').join('')+'</tbody>';
+}
+$('#dbSearch').addEventListener('input', renderDbTable);
+$('#dbFilter').addEventListener('change', renderDbTable);
+function openForm(id){
+  editingId = id || null;
+  const c = id ? CHEMS[id] : null;
+  $('#formTitle').textContent = c ? '編輯：'+c.n : '新增化學品';
+  renderForm(c);
+  $('#btnDel').hidden = !(id && custom[id]);
+  $('#btnDel').textContent = id && SEED.some(s => s.id === id) ? '還原為內建資料' : '刪除自訂資料';
+  $('#formPanel').hidden = false; $('#formPanel').scrollIntoView({block:'nearest'});
+}
+$('#dbTable').addEventListener('click', e => { const b = e.target.closest('[data-edit]'); if(b) openForm(b.dataset.edit); });
+$('#btnNew').onclick = () => openForm(null);
+$('#btnCancel').onclick = () => { $('#formPanel').hidden = true; };
+$('#btnSave').onclick = () => {
+  const c = {};
+  FIELDS.forEach(f => { const v = $('#f-'+f[0]).value.trim(); if(v !== '') c[f[0]] = f[2]==='num' ? parseFloat(v) : v; });
+  if(!c.n){ toast('請輸入中文名稱'); return; }
+  if(!c.id) c.id = 'c' + Date.now().toString(36);
+  if(!c.cas) c.cas = '—';
+  if(!c.st) c.st = 'l';
+  custom[c.id] = c; store.set('crq.custom', custom);
+  $('#formPanel').hidden = true; renderDb(); rows.forEach(r => { if(!r.id){ const m = resolveChem(r.text); if(m) r.id = m.id; } }); renderRows(); renderResults();
+  toast('已儲存「'+c.n+'」');
+};
+$('#btnDel').onclick = () => {
+  if(!editingId) return; delete custom[editingId]; store.set('crq.custom', custom);
+  $('#formPanel').hidden = true; renderDb(); renderRows(); renderResults(); toast('已更新資料庫');
+};
+$('#ghsCodes').textContent = Object.keys(GHS).join(' ');
+
+/* ---------- Excel ---------- */
+function chemRow(c){ return FIELDS.map(f => c[f[0]] ?? ''); }
+function buildWorkbook(){
+  const {items, totals} = evaluateAll();
+  const wb = XLSX.utils.book_new();
+  const r1 = [['化學品','CAS','最大存量','單位','換算重量 kg','年運作量 kg','法規','判定','倍數/比值','判定摘要','說明','依據']];
+  items.forEach(it => it.res.forEach(r => r1.push([it.chem.n, it.chem.cas, it.qty, it.unit, +it.kg.toFixed(2), it.annualEst?'（未填）':+it.annualKg.toFixed(2),
+    LAWS[r.law], LEVEL[r.level], r.ratio==null?'':+r.ratio.toFixed(3), r.title, r.lines.join('\n'), r.basis])));
+  const ws1 = XLSX.utils.aoa_to_sheet(r1);
+  ws1['!cols'] = [{wch:16},{wch:12},{wch:9},{wch:5},{wch:11},{wch:11},{wch:30},{wch:9},{wch:9},{wch:26},{wch:80},{wch:40}];
+  ws1['!autofilter'] = {ref:'A1:L'+r1.length};
+  XLSX.utils.book_append_sheet(wb, ws1, '判定結果');
+
+  const r2 = [['化學品','CAS','最大存量','單位'].concat(LAW_ORDER.map(k => LAWS[k]))];
+  items.forEach(it => r2.push([it.chem.n, it.chem.cas, it.qty, it.unit].concat(LAW_ORDER.map(k => { const r = it.res.find(x => x.law === k); return r ? LEVEL[r.level]+(r.level!=='na'?'：'+r.title:'') : ''; }))));
+  const ws2 = XLSX.utils.aoa_to_sheet(r2);
+  ws2['!cols'] = [{wch:16},{wch:12},{wch:9},{wch:5}].concat(LAW_ORDER.map(() => ({wch:24})));
+  XLSX.utils.book_append_sheet(wb, ws2, '法規矩陣');
+
+  // 依法規彙整：每部法規列出適用的化學品，方便直接做申報、監測計畫
+  const r2b = [['法規','判定','#','化學品','CAS','最大存量','單位','倍數/比值','判定摘要']];
+  OV.forEach(([k]) => {
+    items.map(it => ({it, r:it.byLaw[k]})).filter(e => e.r && e.r.level !== 'na')
+      .sort((a,b) => RANK[b.r.level] - RANK[a.r.level] || (b.r.ratio || 0) - (a.r.ratio || 0))
+      .forEach(({it, r}) => r2b.push([LAWS[k], LEVEL[r.level], it.idx+1, it.chem.n, it.chem.cas, it.qty, it.unit, r.ratio == null ? '' : +r.ratio.toFixed(3), r.title]));
+  });
+  const ws2b = XLSX.utils.aoa_to_sheet(r2b);
+  ws2b['!cols'] = [{wch:34},{wch:9},{wch:5},{wch:18},{wch:12},{wch:10},{wch:5},{wch:9},{wch:36}];
+  ws2b['!autofilter'] = {ref:'A1:I'+r2b.length};
+  XLSX.utils.book_append_sheet(wb, ws2b, '依法規彙整');
+
+  const r3 = [['項目','數值','判定','依據']].concat(totals.map(t => [t.k, +t.v.toFixed(3), t.s, t.basis]));
+  r3.push([], ['判定基準日', settings.date], ['勞工總人數', settings.workers||'（未填）'], ['特別危害健康作業人數', settings.special||'（未填）'], ['作業場所氣積 m³', settings.vol||'（未填）']);
+  const ws3 = XLSX.utils.aoa_to_sheet(r3); ws3['!cols'] = [{wch:30},{wch:12},{wch:24},{wch:34}];
+  XLSX.utils.book_append_sheet(wb, ws3, '合計指數與條件');
+
+  const r4 = [FIELDS.map(f => f[1])].concat(Object.values(CHEMS).map(chemRow));
+  const ws4 = XLSX.utils.aoa_to_sheet(r4); ws4['!cols'] = FIELDS.map(f => ({wch: f[0]==='ghs'||f[0]==='note' ? 40 : 12}));
+  XLSX.utils.book_append_sheet(wb, ws4, '化學品資料庫');
+
+  const r5 = [['法規','全國法規資料庫','修正日期']].concat(SOURCES.map(([k,p,dt]) => [LAWS[k], p ? 'https://law.moj.gov.tw/LawClass/LawAll.aspx?pcode='+p : '', dt]));
+  r5.push(['列管毒性化學物質及其運作管理事項','https://www.cha.gov.tw/cp-93-314-03487-1.html','115.04.27']);
+  r5.push([], ['說明：本表依法規條文與附表整理，供初步判定使用；化學品分類、濃度請以SDS為準，實際義務以主管機關解釋為準。']);
+  const ws5 = XLSX.utils.aoa_to_sheet(r5); ws5['!cols'] = [{wch:50},{wch:70},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, ws5, '法規來源');
+  return XLSX.write(wb, {bookType:'xlsx', type:'array'});
+}
+$('#btnExport').onclick = async () => {
+  if(typeof XLSX === 'undefined'){ toast('Excel 元件尚未載入，請稍後再試'); return; }
+  const data = buildWorkbook();
+  const dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null;
+  if(!dl){
+    // 一般網站（例如 GitHub Pages）：用瀏覽器原生下載
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([data], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+    a.download = '化學品法規判定_'+settings.date+'.xlsx';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast('已匯出 Excel');
+    return;
+  }
+  try{
+    await dl.save({filename:'化學品法規判定_'+settings.date+'.xlsx', data: new Blob([data])});
+    toast('已匯出 Excel');
+  }catch(err){
+    const code = err && err.code;
+    if(code === 'declined') toast('已取消下載');
+    else if(code === 'rate_limited') toast('已有下載確認視窗開啟中，請稍候');
+    else toast('無法下載：'+(err && err.message || code || '未知錯誤'));
+  }
+};
+$('#btnImport').onclick = () => $('#fileImport').click();
+$('#fileImport').addEventListener('change', async e => {
+  const file = e.target.files[0]; if(!file) return;
+  try{
+    const wb = XLSX.read(await file.arrayBuffer(), {type:'array'});
+    const ws = wb.Sheets['化學品資料庫'] || wb.Sheets[wb.SheetNames[0]];
+    const aoa = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+    const head = aoa[0].map(h => String(h).trim());
+    const idx = FIELDS.map(f => head.indexOf(f[1]));
+    if(idx[1] < 0){ toast('找不到「中文名稱」欄，請使用本工具匯出的格式'); return; }
+    let n = 0;
+    aoa.slice(1).forEach(r => {
+      const c = {};
+      FIELDS.forEach((f,j) => { if(idx[j] < 0) return; const v = String(r[idx[j]]).trim(); if(v !== '') c[f[0]] = f[2]==='num' ? parseFloat(v) : v; });
+      if(!c.n) return;
+      if(!c.id) c.id = 'c' + Date.now().toString(36) + n;
+      const seed = SEED.find(s => s.id === c.id);
+      if(seed && JSON.stringify(chemRow(seed).map(String)) === JSON.stringify(chemRow(c).map(String))) return;
+      custom[c.id] = c; n++;
+    });
+    store.set('crq.custom', custom); renderDb(); renderRows(); renderResults();
+    toast('已匯入 '+n+' 筆化學品');
+  }catch(err){ toast('匯入失敗：'+err.message); }
+  e.target.value = '';
+});
+
+/* ---------- reference tab ---------- */
+function renderRef(){
+  const t = (head, body) => '<div class="tablewrap"><table><thead><tr>'+head.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+body.map(r=>'<tr>'+r.map((x,i)=>'<td'+(typeof x==='number'?' class="num"':'')+'>'+x+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';
+  $('#tab-ref').innerHTML =
+    '<h3>公共危險物品第四類管制量（公危辦法附表一；工廠危險物品申報辦法附表一同值）</h3>'+
+    t(['種類','定義（一大氣壓）','管制量'],[
+      ['特殊易燃物','自燃溫度≤100°C，或閃火點<-20°C且沸點≤40°C','50 L'],
+      ['第一石油類','閃火點未達21°C','非水溶性 200 L／水溶性 400 L'],
+      ['酒精類','碳數1~3之飽和一元醇（含變性酒精）','400 L'],
+      ['第二石油類','閃火點21°C以上未達70°C','非水溶性 1,000 L／水溶性 2,000 L'],
+      ['第三石油類','閃火點70°C以上未達200°C','非水溶性 2,000 L／水溶性 4,000 L'],
+      ['第四石油類','閃火點200°C以上未滿250°C','6,000 L'],
+      ['動植物油類','閃火點未滿250°C','10,000 L']])+
+    '<p class="hint">其他類別：第一類氧化性固體 50/300/1,000 kg；第二類易燃固體 100~1,000 kg；第三類發火性/禁水性物質 10~300 kg；第五類自反應物質及有機過氧化物 10/100 kg；第六類氧化性液體 300 kg。</p>'+
+    '<h3>優先管理化學品附表三臨界量（公噸）</h3>'+
+    t(['危害分類','臨界量'],[['急毒性第1級',5],['急毒性第2、3級',50],['特定標的器官系統毒性－單一暴露第1級',50],['易燃氣體第1、2級',10],['易燃液體第1級；第2、3級儲存溫度超過沸點',10],['易燃液體第2、3級，特定製程可能發生重大危害',50],['易燃液體第2、3級，其他',5000],['氧化性液體／固體第1~3級',50],['禁水性物質第1級',100]])+
+    '<p class="hint">附表二：致癌、生殖細胞致突變、生殖毒性第1級濃度≥1%即報備；上述第2級、呼吸道過敏第1級、嚴重損傷眼睛第1級、重複暴露器官毒性第1級，濃度≥1%且年運作總量≥1公噸者報備。</p>'+
+    '<h3>短時間時量平均容許濃度變量係數（容許暴露標準第3條）</h3>'+
+    t(['容許濃度','變量係數'],[['未滿1',3],['1以上未滿10',2],['10以上未滿100',1.5],['100以上未滿1,000',1.25],['1,000以上',1]])+
+    '<h3>勞動檢查法施行細則附表（節錄，達量即屬甲類危險性工作場所）</h3>'+
+    t(['物質','附表','數量 kg'],[['過氧化氫','附表一 危險物',5000],['環氧乙烷、二硫化碳、乙炔、氫氣','附表一 危險物',5000],['環氧丙烷','附表一 危險物',10000],['氯、氯化氫、甲醛','附表二 有害物',5000],['氨','附表二 有害物',50000],['氟化氫、氰化氫、二氧化硫、溴','附表二 有害物',1000],['光氣、臭氧、四羰化鎳','附表二 有害物',100]])+
+    '<h3>法規來源</h3><div class="tablewrap"><table><thead><tr><th>法規</th><th>修正日期</th></tr></thead><tbody>'+
+    SOURCES.map(([k,p,dt]) => '<tr><td>'+(p?'<a href="https://law.moj.gov.tw/LawClass/LawAll.aspx?pcode='+p+'" target="_blank" rel="noopener">'+esc(LAWS[k])+'</a>':esc(LAWS[k]))+'</td><td class="mono">'+(dt||'—')+'</td></tr>').join('')+
+    '<tr><td><a href="https://www.cha.gov.tw/cp-93-314-03487-1.html" target="_blank" rel="noopener">列管毒性化學物質及其運作管理事項</a></td><td class="mono">115.04.27</td></tr></tbody></table></div>'+
+    '<p class="hint">本工具依法規條文與附表整理，供初步判定使用。化學品分類與濃度請以SDS為準，實際義務以主管機關解釋為準。優先管理化學品第2條第2、3款以勞動部指定公告者為限。關注化學物質已依列管關注化學物質及其運作管理事項附表一至三收錄 19 項。</p>';
+}
+
+/* ---------- tabs & boot ---------- */
+document.querySelectorAll('nav.tabs button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('nav.tabs button').forEach(x => x.setAttribute('aria-selected', x === b));
+  ['check','db','ref'].forEach(t => $('#tab-'+t).hidden = t !== b.dataset.tab);
+}));
+let toastTimer;
+function toast(msg){ const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, 2800); }
+
+CHEMS = allChems();
+rows.forEach(r => { if(r.text && !CHEMS[r.id]){ const m = resolveChem(r.text); r.id = m ? m.id : ''; } });
+fillDatalist(); renderRows(); renderResults(); renderDb(); renderRef();
+</script>
+</body>
+</html>
