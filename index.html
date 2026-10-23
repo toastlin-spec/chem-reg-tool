@@ -4,10 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="輸入化學品與數量，對照台灣 16 部化學品相關法規判定適用義務、管制量倍數與合計指數，並可匯出 Excel。">
+<meta name="theme-color" content="#0d6654">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="化學品法規">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>化學品法規速查表</title>
 </head>
 <body>
-<title>化學品法規速查表</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -194,6 +202,7 @@ a{color:var(--accent)}
     </div>
     <div class="toolbar">
       <label>判定基準日 <input type="date" id="refDate"></label>
+      <button id="btnInstall" hidden>安裝 App</button>
       <button class="primary" id="btnExport">匯出 Excel</button>
     </div>
   </header>
@@ -298,7 +307,7 @@ a{color:var(--accent)}
 </div>
 <div class="toast" id="toast" hidden></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
 <script src="chem-data.js"></script>
 <script>
 const LAWS = {
@@ -1294,10 +1303,17 @@ $('#btnExport').onclick = async () => {
   const data = buildWorkbook();
   const dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null;
   if(!dl){
-    // 一般網站（例如 GitHub Pages）：用瀏覽器原生下載
+    const fname = '化學品法規判定_'+settings.date+'.xlsx';
+    // 手機：用系統分享選單（可存到雲端硬碟、LINE、Email）
+    const file = typeof File === 'function' ? new File([data], fname, {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}) : null;
+    if(file && matchMedia('(pointer: coarse)').matches && navigator.canShare && navigator.canShare({files:[file]})){
+      try{ await navigator.share({files:[file], title:'化學品法規判定'}); toast('已匯出 Excel'); return; }
+      catch(err){ if(err && err.name === 'AbortError'){ toast('已取消分享'); return; } }
+    }
+    // 電腦與其他情況：用瀏覽器原生下載
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([data], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
-    a.download = '化學品法規判定_'+settings.date+'.xlsx';
+    a.download = fname;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
     toast('已匯出 Excel');
@@ -1366,6 +1382,23 @@ function renderRef(){
     '<p class="hint">本工具依法規條文與附表整理，供初步判定使用。化學品分類與濃度請以SDS為準，實際義務以主管機關解釋為準。優先管理化學品第2條第2、3款以勞動部指定公告者為限。關注化學物質已依列管關注化學物質及其運作管理事項附表一至三收錄 19 項。</p>';
 }
 
+/* ---------- 安裝成 App（只在獨立網站有效，嵌入 Claude 網頁時不顯示） ---------- */
+(() => {
+  let topLevel = false; try{ topLevel = window.top === window; }catch(e){}
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  if(!topLevel || standalone) return;
+  const btn = $('#btnInstall'); let deferred = null;
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; btn.hidden = false; });
+  window.addEventListener('appinstalled', () => { btn.hidden = true; deferred = null; toast('已安裝，可從桌面或主畫面開啟'); });
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if(ios && 'serviceWorker' in navigator) btn.hidden = false;
+  btn.onclick = async () => {
+    if(deferred){ deferred.prompt(); const r = await deferred.userChoice; if(r.outcome !== 'accepted') toast('已取消安裝'); deferred = null; btn.hidden = true; }
+    else if(ios) toast('請點 Safari 下方的「分享」按鈕，再選「加入主畫面」');
+  };
+  window.addEventListener('offline', () => toast('目前離線：仍可查詢與判定，資料為上次更新的版本'));
+})();
+
 /* ---------- tabs & boot ---------- */
 document.querySelectorAll('nav.tabs button').forEach(b => b.addEventListener('click', () => {
   document.querySelectorAll('nav.tabs button').forEach(x => x.setAttribute('aria-selected', x === b));
@@ -1377,6 +1410,11 @@ function toast(msg){ const t = $('#toast'); t.textContent = msg; t.hidden = fals
 CHEMS = allChems();
 rows.forEach(r => { if(r.text && !CHEMS[r.id]){ const m = resolveChem(r.text); r.id = m ? m.id : ''; } });
 fillDatalist(); renderRows(); renderResults(); renderDb(); renderRef();
+</script>
+<script>
+if('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
 </script>
 </body>
 </html>
